@@ -127,7 +127,7 @@ where the components are respectively:
 - stack of unconsumed inputs at ancestor levels
 - index of current level
 
-### vertical composition
+### vertical composition: focus
 Let's start with the easier definition, for vertical composition:
 ```haskell
 focus :: Traversal' s Text -> PTraversal s Text
