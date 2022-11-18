@@ -145,13 +145,23 @@
 <p>The following arguments are <code>afb</code> and <code>s</code> because an abstract <code>Traversal</code> is defined in continuation-passing style.</p>
 <p>As a setter it has type</p>
 <div class="sourceCode" id="cb13"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>(a <span class="ot">-&gt;</span> <span class="dt">Identity</span> b) <span class="ot">-&gt;</span> (s <span class="ot">-&gt;</span> <span class="dt">Identity</span> t)</span></code></pre></div>
-<p>This can be understood as “if you give me a function for turning <code>a</code> into <code>b</code>, I can then give you a function from <code>s</code> into <code>t</code>”. Here <code>s</code> and <code>t</code> are the “big” types of the traversal, and <code>a</code>, <code>b</code> are the focused “small” types. But our <code>PPrism</code> and <code>PTraversal</code> have <code>s ~ t</code> and <code>a ~ b</code>. So a setter is simply</p>
+<p>This can be understood as</p>
+<blockquote>
+<p>if you give me a function for turning <code>a</code> into <code>b</code>, I can then give you a function from <code>s</code> into <code>t</code></p>
+</blockquote>
+<p>Here <code>s</code> and <code>t</code> are the “big” types of the traversal, and <code>a</code>, <code>b</code> are the focused “small” types. But our <code>PPrism</code> and <code>PTraversal</code> have <code>s ~ t</code> and <code>a ~ b</code>. So a setter is simply</p>
 <div class="sourceCode" id="cb14"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>(a <span class="ot">-&gt;</span> <span class="dt">Identity</span> a) <span class="ot">-&gt;</span> (s <span class="ot">-&gt;</span> <span class="dt">Identity</span> s)</span></code></pre></div>
-<p>Which reads “tell me how to transform <code>a</code> , and since I know how to deal with (parse/render) their occurences in <code>s</code>, I can give you back a function which transforms <code>s</code>”.</p>
+<p>Which reads</p>
+<blockquote>
+<p>tell me how to transform <code>a</code> , and since I know how to deal with (parse/render) their occurences in <code>s</code>, I can give you back a function which transforms <code>s</code>.</p>
+</blockquote>
 <p>A getter/fold is the same except it uses <code>Const</code> as the <code>Applicative</code> for the higher-kinded <code>f</code> so that it ignores the output of the function <code>afb</code> and simply “collects” the “targets” of the traversal.</p>
 <div class="sourceCode" id="cb15"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>(a <span class="ot">-&gt;</span> <span class="dt">Const</span> r a) <span class="ot">-&gt;</span> (s <span class="ot">-&gt;</span> <span class="dt">Const</span> r s)</span></code></pre></div>
 <p>where <code>r</code> is a <code>Monoid</code> so that <code>Const r</code> can be an <code>Applicative</code> while ignoring its second phantom argument.</p>
-<p>Think: “if i can transform <code>a</code>, then surely I can simply return those <code>a</code> to you directly (and ignore the transform your gave me)”.</p>
+<p>Think</p>
+<blockquote>
+<p>if i can transform <code>a</code>, then surely I can simply return those <code>a</code> to you directly (and ignore the transform your gave me).</p>
+</blockquote>
 <p>So the type signature</p>
 <div class="sourceCode" id="cb16"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="ot">focus ::</span> <span class="dt">Traversal'</span> s <span class="dt">Text</span> <span class="ot">-&gt;</span> <span class="dt">PTraversal</span> s <span class="dt">Text</span></span></code></pre></div>
 <p>says we have to promote a type of <code>Traversal' s Text</code> to a type of <code>PTraversal s Text</code>. Which is to say we promote a type which does not deal with <code>Context</code>s to one which does.</p>

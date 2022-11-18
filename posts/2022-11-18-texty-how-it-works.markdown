@@ -154,11 +154,17 @@ As a setter it has type
 ```haskell
 (a -> Identity b) -> (s -> Identity t)
 ```
-This can be understood as "if you give me a function for turning `a` into `b`, I can then give you a function from `s` into `t`". Here `s` and `t` are the "big" types of the traversal, and `a`, `b` are the focused "small" types. But our `PPrism` and `PTraversal` have `s ~ t` and `a ~ b`. So a setter is simply
+This can be understood as
+
+> if you give me a function for turning `a` into `b`, I can then give you a function from `s` into `t`
+
+Here `s` and `t` are the "big" types of the traversal, and `a`, `b` are the focused "small" types. But our `PPrism` and `PTraversal` have `s ~ t` and `a ~ b`. So a setter is simply
 ```haskell
 (a -> Identity a) -> (s -> Identity s)
 ```
-Which reads "tell me how to transform  `a` , and since I know how to deal with (parse/render) their occurences in `s`, I can give you back a function which transforms `s`". 
+Which reads 
+
+> tell me how to transform  `a` , and since I know how to deal with (parse/render) their occurences in `s`, I can give you back a function which transforms `s`. 
 
 A getter/fold is the same except it uses `Const` as the `Applicative` for the higher-kinded `f` so that it ignores the output of the function `afb` and simply "collects" the "targets" of the traversal.
 ```haskell
@@ -166,7 +172,9 @@ A getter/fold is the same except it uses `Const` as the `Applicative` for the hi
 ```
 where `r` is a `Monoid` so that `Const r` can be an `Applicative` while ignoring its second phantom argument.
 
-Think: "if i can transform `a`, then surely I can simply return those `a` to you directly (and ignore the transform your gave me)".
+Think
+
+> if i can transform `a`, then surely I can simply return those `a` to you directly (and ignore the transform your gave me).
 
 So the type signature
 ```haskell
