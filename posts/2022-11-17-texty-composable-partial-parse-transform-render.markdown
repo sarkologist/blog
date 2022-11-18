@@ -53,6 +53,9 @@ if you were only interested in headers, not italics.
 
 So unless you are prepared to define a separate such type for each specific markdown transformation task you want to do, in order to handle all possible scenarios, you would need to instead define a type upfront for the full markdown syntax. And you would be forced to work with other parts of the markdown tree you are not interested in for each specific task.
 
+A full parse would also represent more data in memory than is necessary for the task at hand, say if you were only interested in indenting headers, why would you bother representing `Bullet Int Text` or `Italic Text` in memory?
+Not only that, your parse, transform, and render traversals would each have to walk through extraneous structure in the syntax tree even when performing no modifications.
+
 So a naive approach would be to do:
 ```haskell
 data Markdown = Markdown [ Line ]

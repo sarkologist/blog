@@ -22,7 +22,7 @@
         <div id="content">
             <h1>Texty</h1>
             
-            <h2>Composable, partial, fused, parse-transform-render traversals</h2>
+            <h2>Part 1: Composable, partial, fused, parse-transform-render traversals</h2>
             
 
             <article>
@@ -70,6 +70,8 @@
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Line</span> <span class="ot">=</span> <span class="dt">Header</span> <span class="dt">Int</span> <span class="dt">Text</span> <span class="op">|</span> <span class="dt">Line</span> <span class="dt">Text</span></span></code></pre></div>
 <p>if you were only interested in headers, not italics.</p>
 <p>So unless you are prepared to define a separate such type for each specific markdown transformation task you want to do, in order to handle all possible scenarios, you would need to instead define a type upfront for the full markdown syntax. And you would be forced to work with other parts of the markdown tree you are not interested in for each specific task.</p>
+<p>A full parse would also represent more data in memory than is necessary for the task at hand, say if you were only interested in indenting headers, why would you bother representing <code>Bullet Int Text</code> or <code>Italic Text</code> in memory?
+Not only that, your parse, transform, and render traversals would each have to walk through extraneous structure in the syntax tree even when performing no modifications.</p>
 <p>So a naive approach would be to do:</p>
 <div class="sourceCode" id="cb5"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Markdown</span> <span class="ot">=</span> <span class="dt">Markdown</span> [ <span class="dt">Line</span> ]</span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Line</span> <span class="ot">=</span> <span class="dt">Header</span> <span class="dt">Int</span> [<span class="dt">Inline</span>] <span class="op">|</span> <span class="dt">Line</span> [<span class="dt">Inline</span>]</span>
