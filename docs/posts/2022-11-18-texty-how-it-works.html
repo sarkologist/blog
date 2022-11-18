@@ -35,7 +35,7 @@
 <section>
 <h2 id="how-it-works">how it works</h2>
 <h3 id="lets-start-with-the-types">let’s start with the types</h3>
-<p>Since even though we will also be rendering, we still need to be parsing, so we need to keep track of unconsumed input. So something like:</p>
+<p>Even though we are also <em>rendering</em>, we will still be <em>parsing</em>, so we need to keep track of unconsumed input.</p>
 <div class="sourceCode" id="cb1"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Context</span> <span class="ot">=</span> <span class="dt">Context</span> <span class="dt">Text</span></span></code></pre></div>
 <p>Since we want optics composability for <code>lens</code> we need to keep track of unconsumed input in the completely polymorphic type parameters. So something like:</p>
 <div class="sourceCode" id="cb2"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> <span class="dt">P</span> p f s a <span class="ot">=</span> <span class="dt">Optic'</span> p f (s, <span class="dt">Context</span>) (a, <span class="dt">Context</span>)</span>

@@ -7,7 +7,7 @@ description: "Part 2: How it works"
 
 ## how it works
 ### let's start with the types
-Since even though we will also be rendering, we still need to be parsing, so we need to keep track of unconsumed input. So something like:
+Even though we are also *rendering*, we will still be *parsing*, so we need to keep track of unconsumed input.
 ```haskell
 data Context = Context Text
 ```
