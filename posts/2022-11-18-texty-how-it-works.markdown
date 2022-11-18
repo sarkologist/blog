@@ -1,8 +1,8 @@
 ---
-title: "Texty: Composable, partial, fused, parse-transform-render traversals"
+title: "texty, part 2: how it works"
 author: Guo Liang Oon
 tags: haskell
-description: "Part 2: How it works"
+description: "composable, partial, fused, parse-transform-render traversals"
 ---
 
 ## how it works
