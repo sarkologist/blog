@@ -306,6 +306,10 @@ h1>code,h2>code,h3>code {
     font-size: 1rem
 }
 
+li pre>code {
+    width: 100%;
+}
+
 pre>code {
     font-size: 0.9rem;
     width: 52.5%;

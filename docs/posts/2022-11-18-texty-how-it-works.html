@@ -1,0 +1,411 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+        <title>free as in left adjoint - Texty: Composable, partial, fused, parse-transform-render traversals</title>
+        <link rel="stylesheet" type="text/css" href="../css/default.css" />
+    </head>
+    <body>
+        <div id="header">
+            <div id="logo">
+                <a href="../">free as in left adjoint</a>
+            </div>
+            <div id="navigation">
+                <a href="../">Home</a>
+                <a href="../about.html">About</a>
+                <a href="../contact.html">Contact</a>
+                <a href="../archive.html">Archive</a>
+            </div>
+        </div>
+
+        <div id="content">
+            <h1>Texty: Composable, partial, fused, parse-transform-render traversals</h1>
+            
+            <h2>Part 2: How it works</h2>
+            
+
+            <article>
+<div class="info">
+    Posted on November 18, 2022
+    
+        by Guo Liang Oon
+    
+</div>
+<section>
+<h2 id="how-it-works">how it works</h2>
+<h3 id="lets-start-with-the-types">let’s start with the types</h3>
+<p>Since even though we will also be rendering, we still need to be parsing, so we need to keep track of unconsumed input. So something like:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Context</span> <span class="ot">=</span> <span class="dt">Context</span> <span class="dt">Text</span></span></code></pre></div>
+<p>Since we want optics composability for <code>lens</code> we need to keep track of unconsumed input in the completely polymorphic type parameters. So something like:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> <span class="dt">P</span> p f s a <span class="ot">=</span> <span class="dt">Optic'</span> p f (s, <span class="dt">Context</span>) (a, <span class="dt">Context</span>)</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> <span class="dt">Optic'</span> p f s a <span class="ot">=</span> <span class="dt">Optic</span> p f s s a a</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> <span class="dt">Optic</span> p f s t a b <span class="ot">=</span> p a (f b) <span class="ot">-&gt;</span> p s (f t)</span></code></pre></div>
+<p>Now which <code>lens</code> type correspond to a parse-render? We know 2 things:</p>
+<ul>
+<li>a parse may fail</li>
+<li>we can render a parsed item back into <code>Text</code></li>
+</ul>
+<p>That’s a <code>Prism</code>! A prism can <code>preview</code> to parse, which fails with <code>Nothing</code>, and <code>review</code> to render. So we define:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> <span class="dt">PPrism</span> s a <span class="ot">=</span> <span class="kw">forall</span> p f<span class="op">.</span> (<span class="dt">Choice</span> p, <span class="dt">Applicative</span> f) <span class="ot">=&gt;</span> <span class="dt">P</span> p f s a</span></code></pre></div>
+<p>Why not specialise <code>s</code> to <code>Text</code> since we are parsing from <code>Text</code>? Well, this is because of the partial nature and nested structure of our parsing. Say, if we parse a <code>Text</code> into <code>Header Int Text</code>, we might be interested in further parsing <em>inside</em> the <code>Text</code> of the <code>Header</code>. So we would want to be able to compose <code>PPrism Text Header</code> with <code>PPrism Header Italic</code>, where in the latter <code>s ~ Header</code>.</p>
+<p>But a prism is too specific. A common combinator in parser combinator libraries is <code>many</code> which promotes a <code>Parser a</code> into <code>Parser [a]</code>, repeatedly parsing the same thing in sequence.</p>
+<p>Now we can do <code>PPrism s [a]</code>, but is that really correct? If the list is empty the prism should fail on <code>preview</code>, not return an empty list. Also to compose properly, let’s say to do</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="dt">PPrism</span> <span class="dt">Text</span> [<span class="dt">Header</span>] <span class="ot">-&gt;</span> <span class="dt">PPrism</span> <span class="dt">Header</span> <span class="dt">Italic</span> <span class="ot">-&gt;</span> <span class="dt">PPrism</span> <span class="dt">Text</span> [<span class="dt">Italic</span>]</span></code></pre></div>
+<p>requires more than just the <code>(.)</code> of function composition, and “contaminates” the type of the italic parser with lists, making <em>it</em> in turn less composable.</p>
+<p>But there is a more natural <code>lens</code> type to represent having multiple targets: <code>Traversal</code>. So we can define:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> <span class="dt">PTraversal</span> s a <span class="ot">=</span> <span class="kw">forall</span> f<span class="op">.</span> (<span class="dt">Applicative</span> f) <span class="ot">=&gt;</span> <span class="dt">P</span> (<span class="ot">-&gt;</span>) f s a</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> <span class="dt">P</span> p f s a <span class="ot">=</span> <span class="dt">Optic'</span> p f (s, <span class="dt">Context</span>) (a, <span class="dt">Context</span>)</span></code></pre></div>
+<p>Note that by typeclass constraint polymorphism, a prism is a special case of a traversal, so whatever combinators we define for a traversal can also handle a prism. But in certain situations where we know something to be a prism, we may be to do more. More on this in a later.</p>
+<h3 id="combinatorial-apis">combinatorial APIs</h3>
+<p>There is a question of <a href="https://www.fpcomplete.com/blog/2016/11/covariance-contravariance/">covariance/contravariance</a> and how it relates to combinatorial APIs.</p>
+<p>With such an API you want to compose <code>(a,a) -&gt; a</code>. But what if it is not always exactly <code>a</code>? Then it matters what is on the left or right of the function arrow. If we do</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>(<span class="dt">PPrism</span>, <span class="dt">PPrism</span>) <span class="ot">-&gt;</span> <span class="dt">PPrism</span></span></code></pre></div>
+<p>then we cannot take <code>PTraversal</code> as argument, but we return a stronger type, since a <code>PPrism</code> can be then passed along to another combinator which takes <code>PTraversal</code>s. So ideally we would want to take a weaker type and return a stronger type:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>(<span class="dt">PTraversal</span>, <span class="dt">PTraversal</span>) <span class="ot">-&gt;</span> <span class="dt">PPrism</span></span></code></pre></div>
+<p>But that is nonsensical as traversals can have multiple targets and prisms have at most one. So the best option then seems to be</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>(<span class="dt">PTraversal</span>, <span class="dt">PTraversal</span>) <span class="ot">-&gt;</span> <span class="dt">PTraversal</span></span></code></pre></div>
+<p>So our primitive parser-renderers are prisms, but everything becomes a traversal once you use it with a combinator. But that’s fine because all our combinators can work with traversals. All good.</p>
+<h3 id="primitives">primitives</h3>
+<p>Before we have anything to compose we need to define our primitive parser-renderers.</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- lifts a `Parser a` and a builder `a -&gt; Text` for it to a `PPrism Text a`</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="ot">pPrism ::</span> <span class="dt">Parser</span> a <span class="ot">-&gt;</span> (a <span class="ot">-&gt;</span> <span class="dt">Text</span>) <span class="ot">-&gt;</span> <span class="dt">PPrism</span> <span class="dt">Text</span> a</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>pPrism parse render <span class="ot">=</span> prism' build match</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>  <span class="kw">where</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>    match <span class="ot">=</span> parseInContext parse</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>    build (a, ctx) <span class="ot">=</span> (render a, ctx)</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="co">-- lifts a `Parser a` to a matcher for a `PPrism Text a`</span></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="ot">parseInContext ::</span> <span class="dt">Parser</span> a <span class="ot">-&gt;</span> (<span class="dt">Text</span>, <span class="dt">Context</span>) <span class="ot">-&gt;</span> <span class="dt">Maybe</span> (a, <span class="dt">Context</span>)</span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>parseInContext p (input, (<span class="dt">Context</span> after above lvl)) <span class="ot">=</span> eitherToMaybe <span class="op">$</span></span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>  parse (contextualise <span class="op">&lt;$&gt;</span> p <span class="op">&lt;*&gt;</span> getInput) <span class="st">&quot;&quot;</span> input</span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>  <span class="kw">where</span></span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a>    contextualise parsed unconsumed <span class="ot">=</span> (parsed, <span class="dt">Context</span> (unconsumed <span class="op">&lt;&gt;</span> after) above lvl)</span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a>    eitherToMaybe e <span class="ot">=</span> <span class="kw">case</span> e <span class="kw">of</span></span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a>            <span class="dt">Left</span> _ <span class="ot">-&gt;</span> <span class="dt">Nothing</span></span>
+<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a>            <span class="dt">Right</span> x <span class="ot">-&gt;</span> <span class="dt">Just</span> x</span></code></pre></div>
+<ul>
+<li>Lifting a <code>Parser a</code> simply involves taking care to preserve its unconsumed input in the <code>Context</code>.</li>
+<li>The inverse operation of rendering simply involves printing the parsed value back into <code>Text</code>.</li>
+<li>We discard error messages. Integrating them is a future project.</li>
+<li>Nevermind the two additional arguments to <code>Context</code> for now. We’ll get to that later.</li>
+</ul>
+<h3 id="composition">composition</h3>
+<p>Now on to composition. Of which there are two kinds:</p>
+<ul>
+<li>“horizontal” left-to-right composition
+<ul>
+<li>this is the same as ordinary parser composition, except of course we need to take care of the inverse render operation too</li>
+</ul></li>
+<li>“vertical” top-down composition
+<ul>
+<li>this is where the “partial” in partial parsing comes in</li>
+<li>e.g. we can parse-render a header, or we can parse-render the italic inside the header</li>
+</ul></li>
+</ul>
+<p>Note that vertical composition is a case of recursion. We parse from <code>Text</code> into an <code>a</code>. But the parse may be partial, in which case <code>a</code> also has within itself some <code>Text</code>, which is again a recursive instance of our parse-render problem.</p>
+<p>Similarly to how top-level horizontal composition needs to keep track of unconsumed input, so does child-level horizontal composition. But here is where things get a little complicated.</p>
+<p>Call our horizontal left-to-right combinator <code>||&gt;</code>. To construct <code>left ||&gt; right</code>, we must pass <code>left</code>’s unconsumed input to <code>right</code>. And in order to get <code>left</code>’s unconsumed input we need to “run”/parse it, which in the case of our design is running a prism or a traversal to produce their “child” targets.</p>
+<p>Here is the problem with vertical composition, which we will call <code>focus</code>. If we do <code>up . focus target . down</code> then down has its own horizontal unconsumed input context, but not its parent’s or ancestors’. So we must define <code>Context Text [Text]</code>, where <code>[Text]</code> is a stack of ancestor unconsumed inputs.</p>
+<p>Actually even that is not enough, since we have the option of doing <code>||&gt;</code> at multiple levels. Consider</p>
+<ul>
+<li><code>(header 1 . focus title . italic) ||&gt; strikethrough</code>
+<ul>
+<li>which would parse <code># *i*\n~~s~~</code></li>
+</ul></li>
+<li><code>header 1 . focus title . (italic ||&gt; strikethrough)</code>
+<ul>
+<li>which would parse <code># *i ~~s~~\n</code></li>
+</ul></li>
+</ul>
+<p>So additionally, we also need to keep track of which level we are <code>focus</code>ed at when we apply <code>||&gt;</code>.</p>
+<p>So we arrive at our final definition of <code>Context</code> as:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Context</span> <span class="ot">=</span> <span class="dt">Context</span> <span class="dt">Text</span> (<span class="dt">Vector</span> <span class="dt">Text</span>) <span class="dt">Int</span></span></code></pre></div>
+<p>where the components are respectively:</p>
+<ul>
+<li>unconsumed input at current level</li>
+<li>stack of unconsumed inputs at ancestor levels</li>
+<li>index of current level</li>
+</ul>
+<h3 id="vertical-composition">vertical composition</h3>
+<p>Let’s start with the easier definition, for vertical composition:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="ot">focus ::</span> <span class="dt">Traversal'</span> s <span class="dt">Text</span> <span class="ot">-&gt;</span> <span class="dt">PTraversal</span> s <span class="dt">Text</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>focus at afb s<span class="op">@</span>(_, ctx<span class="op">@</span>(<span class="dt">Context</span> unconsumed above lvl)) <span class="ot">=</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  <span class="op">...</span></span></code></pre></div>
+<p>As a reminder the API usage looks like: <code>header 1 . focus title . italic</code>, where</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Header</span> <span class="ot">=</span> <span class="dt">Header</span> {</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="ot">  _level ::</span> <span class="dt">Int</span>,</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="ot">  _title ::</span> <span class="dt">Text</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>} </span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a><span class="kw">newtype</span> <span class="dt">Italic</span> <span class="ot">=</span> <span class="dt">Italic</span> {<span class="ot"> _unItalic ::</span> <span class="dt">Text</span> }</span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>makeLenses '<span class="dt">'Header</span></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>makeLenses '<span class="dt">'Italic</span></span></code></pre></div>
+<p>The first argument <code>at</code> tells us where to focus, e.g. <code>_title</code> inside <code>Header</code>.</p>
+<p>The following arguments are <code>afb</code> and <code>s</code> because an abstract <code>Traversal</code> is defined in continuation-passing style.</p>
+<p>As a setter it has type</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>(a <span class="ot">-&gt;</span> <span class="dt">Identity</span> b) <span class="ot">-&gt;</span> (s <span class="ot">-&gt;</span> <span class="dt">Identity</span> t)</span></code></pre></div>
+<p>This can be understood as “if you give me a function for turning <code>a</code> into <code>b</code>, I can then give you a function from <code>s</code> into <code>t</code>”. Here <code>s</code> and <code>t</code> are the “big” types of the traversal, and <code>a</code>, <code>b</code> are the focused “small” types. But our <code>PPrism</code> and <code>PTraversal</code> have <code>s ~ t</code> and <code>a ~ b</code>. So a setter is simply</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>(a <span class="ot">-&gt;</span> <span class="dt">Identity</span> a) <span class="ot">-&gt;</span> (s <span class="ot">-&gt;</span> <span class="dt">Identity</span> s)</span></code></pre></div>
+<p>Which reads “tell me how to transform <code>a</code> , and since I know how to deal with (parse/render) their occurences in <code>s</code>, I can give you back a function which transforms <code>s</code>”.</p>
+<p>A getter/fold is the same except it uses <code>Const</code> as the <code>Applicative</code> for the higher-kinded <code>f</code> so that it ignores the output of the function <code>afb</code> and simply “collects” the “targets” of the traversal.</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>(a <span class="ot">-&gt;</span> <span class="dt">Const</span> r a) <span class="ot">-&gt;</span> (s <span class="ot">-&gt;</span> <span class="dt">Const</span> r s)</span></code></pre></div>
+<p>where <code>r</code> is a <code>Monoid</code> so that <code>Const r</code> can be an <code>Applicative</code> while ignoring its second phantom argument.</p>
+<p>Think: “if i can transform <code>a</code>, then surely I can simply return those <code>a</code> to you directly (and ignore the transform your gave me)”.</p>
+<p>So the type signature</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="ot">focus ::</span> <span class="dt">Traversal'</span> s <span class="dt">Text</span> <span class="ot">-&gt;</span> <span class="dt">PTraversal</span> s <span class="dt">Text</span></span></code></pre></div>
+<p>says we have to promote a type of <code>Traversal' s Text</code> to a type of <code>PTraversal s Text</code>. Which is to say we promote a type which does not deal with <code>Context</code>s to one which does.</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="ot">focus ::</span> <span class="dt">Traversal'</span> s <span class="dt">Text</span> <span class="ot">-&gt;</span> <span class="dt">PTraversal</span> s <span class="dt">Text</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>focus at afb s<span class="op">@</span>(_, ctx<span class="op">@</span>(<span class="dt">Context</span> unconsumed above lvl)) <span class="ot">=</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>  <span class="kw">let</span> afbsft <span class="ot">=</span> _1</span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>         <span class="op">.</span> at</span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>         <span class="op">.</span> textAtLevel <span class="co">-- prepare new Context for text at `focus`</span></span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>            (lvl<span class="op">+</span><span class="dv">1</span>) <span class="co">-- keep track of the number of times we focus</span></span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>            (V.snoc above unconsumed) <span class="co">-- save current-level unconsumed to `Context`</span></span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>  <span class="kw">in</span> afbsft afb s</span>
+<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a><span class="co">-- prepare fresh `Context`</span></span>
+<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a><span class="ot">textAtLevel ::</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Vector</span> <span class="dt">Text</span> <span class="ot">-&gt;</span> <span class="dt">Iso'</span> <span class="dt">Text</span> (<span class="dt">Text</span>, <span class="dt">Context</span>)</span>
+<span id="cb17-12"><a href="#cb17-12" aria-hidden="true" tabindex="-1"></a>textAtLevel lvl unconsumeds <span class="ot">=</span> iso</span>
+<span id="cb17-13"><a href="#cb17-13" aria-hidden="true" tabindex="-1"></a>  (\txt <span class="ot">-&gt;</span> (txt, <span class="dt">Context</span> <span class="st">&quot;&quot;</span> unconsumeds lvl))</span>
+<span id="cb17-14"><a href="#cb17-14" aria-hidden="true" tabindex="-1"></a>  (\(txt, <span class="dt">Context</span> rest _ _) <span class="ot">-&gt;</span> txt <span class="op">&lt;&gt;</span> rest)</span></code></pre></div>
+<p>First we do <code>_1</code> to “focus” on the value at which we want to <code>focus</code>. The second component of the <code>(a, Context)</code> tuple we leave untouched, since that deals with the context of the parent, not the child. To see this, note that</p>
+<pre><code># *this is* a header\n unconsumed</code></pre>
+<p>when parsed gives</p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>(<span class="dt">Header</span> <span class="dv">1</span> <span class="st">&quot;*this is* a header&quot;</span>, <span class="dt">Context</span> <span class="st">&quot; unconsumed&quot;</span> V.empty <span class="dv">0</span>)</span></code></pre></div>
+<p>and that context does not change, even after <code>focus</code>ing at the header’s content <code>"*this is* a header"</code>, which should be given a <em>fresh</em> context of its own for the recursive case, i.e. further parsing italics inside the header should yield</p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>(<span class="dt">Italic</span> <span class="st">&quot;this is&quot;</span>, <span class="dt">Context</span> <span class="st">&quot; a header&quot;</span> (V.fromList [<span class="st">&quot; unconsumed&quot;</span>]) <span class="dv">1</span>)</span></code></pre></div>
+<p>So what remains is to prepare the context for the child:</p>
+<ul>
+<li><code>textAtLevel</code>
+<ul>
+<li>the focused text will be in the left of <code>(Text, Context)</code> hence unconsumed is empty <code>""</code></li>
+</ul></li>
+<li><code>lvl+1</code>
+<ul>
+<li>we go one level deeper, so increment the level of the context</li>
+</ul></li>
+<li><code>V.snoc above unconsumed</code>
+<ul>
+<li>preserve the parent unconsumed by adding to our stack</li>
+</ul></li>
+</ul>
+<p>Remember that with parse-rendering we need to do things in both directions, parse and render. Using <code>Iso</code>s wherever we can to chain <code>lens</code> combinators automatically does this. Whence</p>
+<div class="sourceCode" id="cb21"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="ot">textAtLevel ::</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Vector</span> <span class="dt">Text</span> <span class="ot">-&gt;</span> <span class="dt">Iso'</span> <span class="dt">Text</span> (<span class="dt">Text</span>, <span class="dt">Context</span>)</span></code></pre></div>
+<p>Finally, we call our promoted <code>afbsft :: PTraversal s Text</code> on the continuation <code>afb</code> and apply it to the parse input <code>s</code>. Done.</p>
+<h3 id="horizontal-composition-choice">horizontal composition: choice</h3>
+<p>As a warm up to working with horizontal sequential left-to-right composition, let’s work with <code>&lt;||&gt;</code> which tries one parser and if it fails tries the other. It will suggest some tricks which will also help in defining <code>||&gt;</code>.</p>
+<p>Note that <code>lens</code> has a combinator <code>failing</code> which seems to do what we want. Its type specialised to <code>Traversal'</code> is</p>
+<div class="sourceCode" id="cb22"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="ot">failing ::</span> <span class="dt">Traversal'</span> s a <span class="ot">-&gt;</span> <span class="dt">Traversal'</span> s a <span class="ot">-&gt;</span> <span class="dt">Traversal</span> s a</span></code></pre></div>
+<p>But often we have to have the “small” <code>a</code> type be different. For example, if we want to do <code>italic &lt;||&gt; bold</code> in which case <code>italic</code> and <code>bold</code> would have different “small” types <code>Italic</code> and <code>Bold</code>.</p>
+<div class="sourceCode" id="cb23"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="op">&lt;||&gt;</span><span class="ot"> ::</span> <span class="dt">Traversal'</span> s <span class="dt">Bold</span> <span class="ot">-&gt;</span> <span class="dt">Traversal'</span> s <span class="dt">Italic</span> <span class="ot">-&gt;</span> <span class="dt">Traversal</span> s <span class="op">?</span></span></code></pre></div>
+<p>So we need something like:</p>
+<div class="sourceCode" id="cb24"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="ot">(&lt;||&gt;) ::</span> <span class="dt">PTraversal</span> s a <span class="ot">-&gt;</span> <span class="dt">PTraversal</span> s b <span class="ot">-&gt;</span> <span class="dt">PTraversal</span> s (<span class="dt">Either</span> a b)</span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>(<span class="op">&lt;||&gt;</span>) afbst afbst' afb'' s <span class="ot">=</span></span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>  <span class="kw">let</span> <span class="dt">Pair</span> constt ft <span class="ot">=</span> afbst aConstfb s</span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>  <span class="kw">in</span> <span class="kw">case</span> getConst constt <span class="kw">of</span></span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a>       <span class="dt">Any</span> <span class="dt">True</span> <span class="ot">-&gt;</span> ft</span>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>       <span class="dt">Any</span> <span class="dt">False</span> <span class="ot">-&gt;</span> afbst' afb' s</span>
+<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a>  <span class="kw">where</span> aConstfb  (a,ctx) <span class="ot">=</span> onlyIfLeft a ctx <span class="op">&lt;$&gt;</span> <span class="dt">Pair</span> (<span class="dt">Const</span> (<span class="dt">Any</span> <span class="dt">True</span>)) (afb'' (<span class="dt">Left</span> a, ctx))</span>
+<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a>        afb' (a,ctx) <span class="ot">=</span> onlyIfRight a ctx <span class="op">&lt;$&gt;</span> afb'' (<span class="dt">Right</span> a, ctx)</span>
+<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-10"><a href="#cb24-10" aria-hidden="true" tabindex="-1"></a>onlyIfRight _ _ (<span class="dt">Right</span> b, ctx') <span class="ot">=</span> (b, ctx')</span>
+<span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a>onlyIfRight a ctx (<span class="dt">Left</span> _, _) <span class="ot">=</span> (a, ctx)</span>
+<span id="cb24-12"><a href="#cb24-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-13"><a href="#cb24-13" aria-hidden="true" tabindex="-1"></a>onlyIfLeft _ _ (<span class="dt">Left</span> b, ctx') <span class="ot">=</span> (b, ctx')</span>
+<span id="cb24-14"><a href="#cb24-14" aria-hidden="true" tabindex="-1"></a>onlyIfLeft a ctx (<span class="dt">Right</span> _, _) <span class="ot">=</span> (a, ctx)</span></code></pre></div>
+<p>The small type of the return value is <code>Either a b</code> corresponding to whether the left or the right branch succeeded.</p>
+<p>How do we tell if the left branch has succeeded? We can follow the definition of <code>failing</code> and use the <code>Bazaar</code> type which is some kind of maximally general list-with-context traversal. But a simpler solution is possible.</p>
+<p>Recall the types of our optics:</p>
+<div class="sourceCode" id="cb25"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> <span class="dt">PPrism</span> s a <span class="ot">=</span> <span class="kw">forall</span> p f<span class="op">.</span> (<span class="dt">Choice</span> p, <span class="dt">Applicative</span> f) <span class="ot">=&gt;</span> <span class="dt">P</span> p f s a</span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> <span class="dt">PTraversal</span> s a <span class="ot">=</span> <span class="kw">forall</span> f<span class="op">.</span> (<span class="dt">Applicative</span> f) <span class="ot">=&gt;</span> <span class="dt">P</span> (<span class="ot">-&gt;</span>) f s a</span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> <span class="dt">P</span> p f s a <span class="ot">=</span> <span class="dt">Optic'</span> p f (s, <span class="dt">Context</span>) (a, <span class="dt">Context</span>)</span></code></pre></div>
+<p>Due to the occurence of the <code>forall</code>, they are a rank-2 types. Which means when used with a function <em>the caller</em> gets to decide what <code>p</code> and <code>f</code> are.</p>
+<p>We need to somehow “run” the left <code>Traversal</code>. Usually this is done by fixing <code>f</code> to <code>Const</code>, but <em>the caller</em> of the function gets to decide <code>f</code>, not us, so that’s not an option.</p>
+<p>What we can do instead is to run the traversal “in parallel” with <code>f</code>, using the product applicative:</p>
+<div class="sourceCode" id="cb26"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Product</span> f g a <span class="ot">=</span> <span class="dt">Pair</span> (f a) (g a)</span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> (<span class="dt">Applicative</span> f, <span class="dt">Applicative</span> g) <span class="ot">=&gt;</span> <span class="dt">Applicative</span> (<span class="dt">Product</span> f g) <span class="kw">where</span></span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pure</span> x <span class="ot">=</span> <span class="dt">Pair</span> (<span class="fu">pure</span> x) (<span class="fu">pure</span> x)</span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a>    <span class="dt">Pair</span> f g <span class="op">&lt;*&gt;</span> <span class="dt">Pair</span> x y <span class="ot">=</span> <span class="dt">Pair</span> (f <span class="op">&lt;*&gt;</span> x) (g <span class="op">&lt;*&gt;</span> y)</span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a>    liftA2 f (<span class="dt">Pair</span> a b) (<span class="dt">Pair</span> x y) <span class="ot">=</span> <span class="dt">Pair</span> (liftA2 f a x) (liftA2 f b y)</span></code></pre></div>
+<p>With <code>Pair Const f</code>, <code>f</code> is still free to be chosen by the caller, while we use <code>Const</code> to inspect the contents of the traversal.</p>
+<p>We use <code>Const</code> with the <code>Any</code> monoid, since we are interested in only the binary yes/no question of whether or not the left branch succeeded, i.e. if it has any traversal targets.</p>
+<ul>
+<li>if it does, then we simply return the traversal result of running with the original applicative <code>f</code>, extracted from the right component of our product <code>Pair (Const Any) f t</code></li>
+<li>if it doesn’t then we simply run the traversal for the right branch.</li>
+</ul>
+<p><code>onlyIfLeft</code> and <code>onlyIfRight</code> are important in the inverse render direction. We render with the left only if it was the left which parsed, and with the right only if it was the right which parsed. This is to respect traversal laws, but more on this later.</p>
+<h3 id="horizontal-composition-sequential">horizontal composition: sequential</h3>
+<p>Now that we are warmed up, and with the product applicative trick under our belts, let’s implement sequential composition:</p>
+<div class="sourceCode" id="cb27"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="ot">andThen ::</span> <span class="dt">Bool</span> <span class="ot">-&gt;</span> <span class="dt">PTraversal</span> s a <span class="ot">-&gt;</span> <span class="dt">PTraversal</span> <span class="dt">Text</span> b <span class="ot">-&gt;</span> <span class="dt">PTraversal</span> s (<span class="dt">Either</span> a b)</span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>andThen rightMustSucceed afbsft afbsft' afb'' s<span class="op">@</span>(_, <span class="dt">Context</span> _ above lvl_s) <span class="ot">=</span></span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>  <span class="co">-- run left</span></span>
+<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a>  <span class="kw">let</span> <span class="dt">Pair</span> constt ft <span class="ot">=</span> afbsft aConstfb s</span>
+<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a>  <span class="kw">in</span> <span class="kw">case</span> getConst constt <span class="kw">of</span></span>
+<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a>       <span class="dt">Last</span> (<span class="dt">Just</span> (unconsumed, isFocused)) <span class="ot">-&gt;</span></span>
+<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a>         <span class="co">-- run right, on unconsumed from left</span></span>
+<span id="cb27-8"><a href="#cb27-8" aria-hidden="true" tabindex="-1"></a>         <span class="kw">let</span> <span class="dt">Pair</span> constt' ft' <span class="ot">=</span> afbsft' aConstfb' (unconsumed, <span class="dt">Context</span> <span class="st">&quot;&quot;</span> above lvl_s)</span>
+<span id="cb27-9"><a href="#cb27-9" aria-hidden="true" tabindex="-1"></a>         <span class="kw">in</span> <span class="kw">case</span> getConst constt' <span class="kw">of</span></span>
+<span id="cb27-10"><a href="#cb27-10" aria-hidden="true" tabindex="-1"></a>           <span class="dt">Any</span> <span class="dt">True</span> <span class="ot">-&gt;</span></span>
+<span id="cb27-11"><a href="#cb27-11" aria-hidden="true" tabindex="-1"></a>             <span class="co">-- merge results of both left/right</span></span>
+<span id="cb27-12"><a href="#cb27-12" aria-hidden="true" tabindex="-1"></a>             <span class="kw">let</span> merge (a, <span class="dt">Context</span> ctx _ _) (txt, <span class="dt">Context</span> ctx' _ _) <span class="ot">=</span></span>
+<span id="cb27-13"><a href="#cb27-13" aria-hidden="true" tabindex="-1"></a>                   <span class="co">-- if focused, then everything consumed will be rebuilt into 'a',</span></span>
+<span id="cb27-14"><a href="#cb27-14" aria-hidden="true" tabindex="-1"></a>                   <span class="co">--   so discard 'ctx' which consists entirely of unconsumed</span></span>
+<span id="cb27-15"><a href="#cb27-15" aria-hidden="true" tabindex="-1"></a>                   <span class="co">-- if not focused, we have already discarded unconsumed, so just use rebuilt 'ctx'</span></span>
+<span id="cb27-16"><a href="#cb27-16" aria-hidden="true" tabindex="-1"></a>                   <span class="kw">let</span> rebuilt <span class="ot">=</span> <span class="kw">if</span> isFocused <span class="kw">then</span> <span class="st">&quot;&quot;</span> <span class="kw">else</span> ctx</span>
+<span id="cb27-17"><a href="#cb27-17" aria-hidden="true" tabindex="-1"></a>                   <span class="kw">in</span> (a, <span class="dt">Context</span> (rebuilt <span class="op">&lt;&gt;</span> txt <span class="op">&lt;&gt;</span> ctx') above lvl_s)</span>
+<span id="cb27-18"><a href="#cb27-18" aria-hidden="true" tabindex="-1"></a>             <span class="kw">in</span> merge <span class="op">&lt;$&gt;</span> ft <span class="op">&lt;*&gt;</span> ft'</span>
+<span id="cb27-19"><a href="#cb27-19" aria-hidden="true" tabindex="-1"></a>           <span class="dt">Any</span> <span class="dt">False</span> <span class="ot">-&gt;</span> <span class="kw">if</span> rightMustSucceed</span>
+<span id="cb27-20"><a href="#cb27-20" aria-hidden="true" tabindex="-1"></a>                        <span class="kw">then</span> <span class="fu">pure</span> s</span>
+<span id="cb27-21"><a href="#cb27-21" aria-hidden="true" tabindex="-1"></a>                        <span class="kw">else</span> <span class="kw">let</span> replaceUnconsumed (t, <span class="dt">Context</span> rebuilt abv l) <span class="ot">=</span></span>
+<span id="cb27-22"><a href="#cb27-22" aria-hidden="true" tabindex="-1"></a>                                   (t, <span class="dt">Context</span> (rebuilt <span class="op">&lt;&gt;</span> unconsumed) abv l)</span>
+<span id="cb27-23"><a href="#cb27-23" aria-hidden="true" tabindex="-1"></a>                             <span class="kw">in</span> replaceUnconsumed <span class="op">&lt;$&gt;</span> ft</span>
+<span id="cb27-24"><a href="#cb27-24" aria-hidden="true" tabindex="-1"></a>       <span class="dt">Last</span> <span class="dt">Nothing</span> <span class="ot">-&gt;</span> <span class="fu">pure</span> s</span>
+<span id="cb27-25"><a href="#cb27-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-26"><a href="#cb27-26" aria-hidden="true" tabindex="-1"></a>  <span class="kw">where</span> aConstfb  (a,ctx<span class="op">@</span>(<span class="dt">Context</span> unconsumed abv lvl)) <span class="ot">=</span></span>
+<span id="cb27-27"><a href="#cb27-27" aria-hidden="true" tabindex="-1"></a>          <span class="kw">let</span> isFocused <span class="ot">=</span> lvl <span class="op">&gt;</span> <span class="dv">0</span></span>
+<span id="cb27-28"><a href="#cb27-28" aria-hidden="true" tabindex="-1"></a>              <span class="co">-- if not focused, discard the parent top-level 'unconsumed',</span></span>
+<span id="cb27-29"><a href="#cb27-29" aria-hidden="true" tabindex="-1"></a>              <span class="co">--  since it is now the responsibility of afbsft'</span></span>
+<span id="cb27-30"><a href="#cb27-30" aria-hidden="true" tabindex="-1"></a>              <span class="co">--  we do it here since doing it at parent will rebuild child unconsumed into it</span></span>
+<span id="cb27-31"><a href="#cb27-31" aria-hidden="true" tabindex="-1"></a>              <span class="co">--  and we would have to disentangle child/parent unconsumed</span></span>
+<span id="cb27-32"><a href="#cb27-32" aria-hidden="true" tabindex="-1"></a>              <span class="co">-- if focused, 'unconsumed' is bottom-level and local to afbst,</span></span>
+<span id="cb27-33"><a href="#cb27-33" aria-hidden="true" tabindex="-1"></a>              <span class="co">--  so will be rebuilt into parent of focus</span></span>
+<span id="cb27-34"><a href="#cb27-34" aria-hidden="true" tabindex="-1"></a>              ctx' <span class="ot">=</span> <span class="dt">Context</span> (<span class="kw">if</span> isFocused <span class="kw">then</span> unconsumed <span class="kw">else</span> <span class="st">&quot;&quot;</span>) abv lvl</span>
+<span id="cb27-35"><a href="#cb27-35" aria-hidden="true" tabindex="-1"></a>              unconsumed_top <span class="ot">=</span> fromMaybe unconsumed (abv <span class="op">!?</span> lvl_s)</span>
+<span id="cb27-36"><a href="#cb27-36" aria-hidden="true" tabindex="-1"></a>          <span class="kw">in</span> onlyIfLeft a ctx' <span class="op">&lt;$&gt;</span> <span class="dt">Pair</span></span>
+<span id="cb27-37"><a href="#cb27-37" aria-hidden="true" tabindex="-1"></a>              (<span class="dt">Const</span> (<span class="dt">Last</span> (<span class="dt">Just</span> (unconsumed_top, isFocused))))</span>
+<span id="cb27-38"><a href="#cb27-38" aria-hidden="true" tabindex="-1"></a>              (afb'' (<span class="dt">Left</span> a, ctx'))</span>
+<span id="cb27-39"><a href="#cb27-39" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-40"><a href="#cb27-40" aria-hidden="true" tabindex="-1"></a>        aConstfb' (a,ctx) <span class="ot">=</span> onlyIfRight a ctx <span class="op">&lt;$&gt;</span> <span class="dt">Pair</span> (<span class="dt">Const</span> (<span class="dt">Any</span> <span class="dt">True</span>)) (afb'' (<span class="dt">Right</span> a, ctx))</span></code></pre></div>
+<p>Let’s be clear on what we need</p>
+<ul>
+<li>we must allow the possibility of the right failing
+<ul>
+<li>this is to be able to define <code>many</code>, more on this later</li>
+<li>whence the <code>Boolean</code> argument <code>rightMustSucceed</code></li>
+</ul></li>
+<li>we must run left first and then pass along its unconsumed input to the right
+<ul>
+<li>the left may be focused, in which case we need to pass along one of its ancestor unconsumed input instead, depending on the level at which the right is applied
+<ul>
+<li><p>recall the cases</p>
+<ul>
+<li><code>(header 1 . focus title . italic) ||&gt; strikethrough</code>
+<ul>
+<li>which would parse <code># *i*\n~~s~~</code></li>
+</ul></li>
+<li><code>header 1 . focus title . (italic ||&gt; strikethrough)</code>
+<ul>
+<li>which would parse <code># *i ~~s~~\n</code></li>
+</ul></li>
+</ul></li>
+<li><p>this is what</p>
+<pre><code>unconsumed_top = fromMaybe unconsumed (abv !? lvl_s)`</code></pre>
+<p>does. Where <code>lvl_s</code> indexes into our stack of parent unconsumed <code>abv</code>.</p></li>
+</ul></li>
+</ul></li>
+<li>if the right has consumed additional input, we must remove this portion from the unconsumed input of the left
+<ul>
+<li><p>otherwise more text would be rebuilt in the render phase for the left than is correct, consider:</p>
+<pre><code>    (header 1 . focus title . italic) ||&gt; strikethrough</code></pre>
+<ul>
+<li><p>the left <code>header 1 . focus title . italic</code> parses</p>
+<ul>
+<li><p>from</p>
+<pre><code>(# *i* h\n~~s~~ unconsumed&quot;, Context &quot;&quot; [] 0)</code></pre></li>
+<li><p>into</p>
+<pre><code>(Italic &quot;i&quot;, Context &quot; h&quot; [&quot;~~s~~&quot; unconsumed] 1)</code></pre></li>
+</ul></li>
+<li><p>the right <code>strikethrough</code> should consume <code>~~s~~</code></p></li>
+<li><p><em>without</em> <code>strikethrough</code> the left’s unconsumed would be <code>~~s~~ unconsumed</code></p></li>
+<li><p>but <em>with</em> <code>strikethrough</code> the left’s unconsumed should be empty</p></li>
+<li><p>we want an identity traversal (one which performs the no-op transform of doing nothing) to produce</p>
+<pre><code># *i* h\n~~s~~ unconsumed</code></pre></li>
+<li><p>not</p>
+<pre><code># *i* h\n~~s~~ unconsumed unconsumed</code></pre>
+<ul>
+<li>here incorrectly, the unconsumed of left and right overlap at <code>unconsumed</code></li>
+</ul></li>
+</ul></li>
+<li><p>this is what the lines involving <code>isFocused</code> do</p>
+<ul>
+<li>it is complicated by the discarding happening in different places, depending on whether the left is focused or not</li>
+</ul></li>
+</ul></li>
+</ul>
+<p>We use the <code>Pair</code> product applicative as before to gather information we need:</p>
+<ul>
+<li>in the left case we need unconsumed input information
+<ul>
+<li>we automatically get parse-success information by just the <code>Last</code> monoid</li>
+<li>it returns the “rightmost” last element of the traversal
+<ul>
+<li>why the rightmost?
+<ul>
+<li><p>in the case the left is not focused, it might still be a shallow traversal of multiple parse targets</p></li>
+<li><p>for example <code>many italic</code> parses many adjacent occurences of italics, and</p>
+<pre><code>(&quot;*i1**i2* unconsumed&quot;, Context &quot;&quot; [] 0)</code></pre>
+<p>gets parsed into</p>
+<pre><code>(Italic &quot;i1&quot;, Context &quot;*i2* unconsumed&quot; [] 0)</code></pre>
+<p>and</p>
+<pre><code>(Italic &quot;i2&quot;, Context &quot; unconsumed&quot; [] 0)</code></pre></li>
+<li><p>each occurence of which was passed the unconsumed input of the previous on the left</p></li>
+<li><p>so to get the unconsumed of the parent, in this case <code>many italic</code>, we want to look at the unconsumed of the last child, in this case <code>" unconsumed"</code> for <code>Italic "i2"</code></p></li>
+</ul></li>
+</ul></li>
+</ul></li>
+<li>in the right case we just need to know if it succeeded, so we use <code>Const Any</code> like in the <code>&lt;||&gt;</code> case</li>
+</ul>
+<p>The <code>merge</code> helper function is for the render phase: it makes sure the parent <code>Text</code> of the right and its unconsumed input are properly concatenated after the text that has been rendered for the left.</p>
+<h3 id="many">many</h3>
+<div class="sourceCode" id="cb37"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="ot">many ::</span> <span class="dt">PTraversal</span> <span class="dt">Text</span> a <span class="ot">-&gt;</span> <span class="dt">PTraversal</span> <span class="dt">Text</span> a</span>
+<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a>many p <span class="ot">=</span> failing (some' p) ignored</span>
+<span id="cb37-3"><a href="#cb37-3" aria-hidden="true" tabindex="-1"></a>  <span class="kw">where</span></span>
+<span id="cb37-4"><a href="#cb37-4" aria-hidden="true" tabindex="-1"></a><span class="ot">    some ::</span> <span class="dt">PTraversal</span> <span class="dt">Text</span> a <span class="ot">-&gt;</span> <span class="dt">PTraversal</span> <span class="dt">Text</span> a</span>
+<span id="cb37-5"><a href="#cb37-5" aria-hidden="true" tabindex="-1"></a>    some p <span class="ot">=</span> (p <span class="op">||&gt;?</span> many' p) <span class="op">.</span> alongside chosen <span class="fu">id</span></span>
+<span id="cb37-6"><a href="#cb37-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-7"><a href="#cb37-7" aria-hidden="true" tabindex="-1"></a>(<span class="op">||&gt;</span>),<span class="ot"> (||&gt;?) ::</span> <span class="dt">PTraversal</span> s a <span class="ot">-&gt;</span> <span class="dt">PTraversal</span> <span class="dt">Text</span> b <span class="ot">-&gt;</span> <span class="dt">PTraversal</span> s (<span class="dt">Either</span> a b)</span>
+<span id="cb37-8"><a href="#cb37-8" aria-hidden="true" tabindex="-1"></a>(<span class="op">||&gt;</span>) <span class="ot">=</span> andThen <span class="dt">True</span></span>
+<span id="cb37-9"><a href="#cb37-9" aria-hidden="true" tabindex="-1"></a>(<span class="op">||&gt;?</span>) <span class="ot">=</span> andThen <span class="dt">False</span></span></code></pre></div>
+<p>Parsec defers to its <code>MonadPlus</code> instance for <code>&lt;|&gt;</code> which is simply the <code>Alternative</code> instance for a <code>Monad</code>, which is a certain “failure”/“choice” monoid for higher kinded types.</p>
+<div class="sourceCode" id="cb38"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> (<span class="dt">Alternative</span> m, <span class="dt">Monad</span> m) <span class="ot">=&gt;</span> <span class="dt">MonadPlus</span> m <span class="kw">where</span></span>
+<span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a><span class="op">...</span></span>
+<span id="cb38-3"><a href="#cb38-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb38-4"><a href="#cb38-4" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> <span class="dt">Applicative</span> f <span class="ot">=&gt;</span> <span class="dt">Alternative</span> f <span class="kw">where</span></span>
+<span id="cb38-5"><a href="#cb38-5" aria-hidden="true" tabindex="-1"></a><span class="ot">    empty ::</span> f a</span>
+<span id="cb38-6"><a href="#cb38-6" aria-hidden="true" tabindex="-1"></a><span class="ot">    (&lt;|&gt;) ::</span> f a <span class="ot">-&gt;</span> f a <span class="ot">-&gt;</span> f a</span>
+<span id="cb38-7"><a href="#cb38-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb38-8"><a href="#cb38-8" aria-hidden="true" tabindex="-1"></a><span class="ot">    some ::</span> f a <span class="ot">-&gt;</span> f [a]</span>
+<span id="cb38-9"><a href="#cb38-9" aria-hidden="true" tabindex="-1"></a>    some v <span class="ot">=</span> some_v</span>
+<span id="cb38-10"><a href="#cb38-10" aria-hidden="true" tabindex="-1"></a>      <span class="kw">where</span></span>
+<span id="cb38-11"><a href="#cb38-11" aria-hidden="true" tabindex="-1"></a>        many_v <span class="ot">=</span> some_v <span class="op">&lt;|&gt;</span> <span class="fu">pure</span> []</span>
+<span id="cb38-12"><a href="#cb38-12" aria-hidden="true" tabindex="-1"></a>        some_v <span class="ot">=</span> liftA2 (<span class="op">:</span>) v many_v</span>
+<span id="cb38-13"><a href="#cb38-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb38-14"><a href="#cb38-14" aria-hidden="true" tabindex="-1"></a><span class="ot">    many ::</span> f a <span class="ot">-&gt;</span> f [a]</span>
+<span id="cb38-15"><a href="#cb38-15" aria-hidden="true" tabindex="-1"></a>    many v <span class="ot">=</span> many_v</span>
+<span id="cb38-16"><a href="#cb38-16" aria-hidden="true" tabindex="-1"></a>      <span class="kw">where</span></span>
+<span id="cb38-17"><a href="#cb38-17" aria-hidden="true" tabindex="-1"></a>        many_v <span class="ot">=</span> some_v <span class="op">&lt;|&gt;</span> <span class="fu">pure</span> []</span>
+<span id="cb38-18"><a href="#cb38-18" aria-hidden="true" tabindex="-1"></a>        some_v <span class="ot">=</span> liftA2 (<span class="op">:</span>) v many_v</span></code></pre></div>
+<p>It defines <code>many</code> and <code>some</code> mutually recursively.</p>
+<p>We follow its example, except we have no <code>Applicative</code> instance for <code>PPrism s</code> or <code>PTraversal</code>. This is because our parse-renderers are bidirectional. So if we want to map <code>a -&gt; b</code> into <code>f a</code> to get <code>f b</code>, we need the inverse <code>b -&gt; a</code>. This is an exponential functor, but that is not relevant here. This means we cannot just parse a single value of <code>a</code> first, parse the rest of <code>[a]</code>, and then <code>liftA2</code> to concatenate with <code>(:)</code>.</p>
+<p>The fact that we use a traversal of <code>a</code> instead of a prism of <code>[a]</code> also means we have to be careful with our base case. Which is when there are no more <code>a</code> to consume. This is when the component parser for a single <code>a</code> fails. This means when we sequence <code>single ||&gt; more</code> we must allow <code>single</code> to succeed and <code>more</code> to fail. This is where the <code>rightMustSucceed</code> argument to <code>andThen</code> comes in, where we use<code>||&gt;?</code> to allow our base case to succeed, and terminate the recursion.</p>
+<p>Note that we can use <code>failing</code> here instead of <code>&lt;||&gt;</code> because for <code>many</code> the types are the same for the multiple items we sequence. Similarly, since types are the same, we use <code>chosen</code> with <code>alongside</code> to eliminate the <code>Either</code> returned by <code>||&gt;?</code>.</p>
+<div class="sourceCode" id="cb39"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="ot">failing ::</span> <span class="dt">Traversal</span> s t a b <span class="ot">-&gt;</span> <span class="dt">Traversal</span> s t a b <span class="ot">-&gt;</span> <span class="dt">Traversal</span> s t a b</span>
+<span id="cb39-2"><a href="#cb39-2" aria-hidden="true" tabindex="-1"></a><span class="ot">(&lt;||&gt;) ::</span> <span class="dt">PTraversal</span> s a <span class="ot">-&gt;</span> <span class="dt">PTraversal</span> s b <span class="ot">-&gt;</span> <span class="dt">PTraversal</span> s (<span class="dt">Either</span> a b)</span>
+<span id="cb39-3"><a href="#cb39-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb39-4"><a href="#cb39-4" aria-hidden="true" tabindex="-1"></a><span class="ot">chosen ::</span> <span class="dt">Lens'</span> (<span class="dt">Either</span> a a) a</span>
+<span id="cb39-5"><a href="#cb39-5" aria-hidden="true" tabindex="-1"></a><span class="ot">alongside ::</span> <span class="dt">Lens'</span> s a <span class="ot">-&gt;</span> <span class="dt">Lens</span> s' a' <span class="ot">-&gt;</span> <span class="dt">Lens</span> (s,s') (a,a')</span>
+<span id="cb39-6"><a href="#cb39-6" aria-hidden="true" tabindex="-1"></a><span class="ot">(||&gt;?) ::</span> <span class="dt">PTraversal</span> s a <span class="ot">-&gt;</span> <span class="dt">PTraversal</span> <span class="dt">Text</span> b <span class="ot">-&gt;</span> <span class="dt">PTraversal</span> s (<span class="dt">Either</span> a b)</span></code></pre></div>
+<p>Lastly, we don’t export <code>some</code> because a <code>Traversal</code> can always have no elements, hence they only make sense with <code>many</code>.</p>
+</section>
+</article>
+
+        </div>
+        <div id="footer">
+            Site proudly generated by
+            <a href="http://jaspervdj.be/hakyll">Hakyll</a>
+        </div>
+    </body>
+</html>
