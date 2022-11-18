@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+        <title>free as in left adjoint - Texty</title>
+        <link rel="stylesheet" type="text/css" href="../css/default.css" />
+    </head>
+    <body>
+        <div id="header">
+            <div id="logo">
+                <a href="../">free as in left adjoint</a>
+            </div>
+            <div id="navigation">
+                <a href="../">Home</a>
+                <a href="../about.html">About</a>
+                <a href="../contact.html">Contact</a>
+                <a href="../archive.html">Archive</a>
+            </div>
+        </div>
+
+        <div id="content">
+            <h1>Texty</h1>
+            
+            <h2>Composable, partial, fused, parse-transform-render traversals</h2>
+            
+
+            <article>
+<div class="info">
+    Posted on November 17, 2022
+    
+        by Guo Liang Oon
+    
+</div>
+<section>
+<h2 id="teaser">teaser</h2>
+<p><img src="https://media.giphy.com/media/B5KgFe6s0rGUjSkMtL/giphy.gif" /></p>
+<p>Do you sometimes feel you have added too many bullet points, and that each top level bullet should be its own heading, with child bullets a new section under that heading? And of course they should be <em>subheadings</em> of the heading all the bullets were originally a section of.</p>
+<p>Here’s the code which does the transformation of the markdown:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ot">unindentBulletIntoSubheader ::</span> <span class="dt">Text</span> <span class="ot">-&gt;</span> <span class="dt">Text</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>unindentBulletIntoSubheader <span class="ot">=</span> execState <span class="op">$</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  zoom (text <span class="op">.</span> many' headerTitleContent <span class="op">.</span> _1 <span class="op">.</span> _HeaderTitleContent) <span class="op">$</span> <span class="kw">do</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    (headerLevel, _, _) <span class="ot">&lt;-</span> get</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    zoom (_3 <span class="op">.</span> text <span class="op">.</span> many' (bullet <span class="op">&lt;%&gt;</span> (header headerLevel)) <span class="op">.</span> _1) <span class="op">$</span> <span class="kw">do</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>       <span class="kw">let</span> f (<span class="dt">Left</span> (<span class="dt">Bullet</span> bulletLevel content)) <span class="ot">=</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>             <span class="kw">if</span> bulletLevel<span class="op">==</span><span class="dv">0</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>             <span class="kw">then</span> <span class="dt">Right</span> (<span class="dt">Header</span> (headerLevel<span class="op">+</span><span class="dv">1</span>) content)</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>             <span class="kw">else</span> <span class="dt">Left</span>  (<span class="dt">Bullet</span> (bulletLevel<span class="op">-</span><span class="dv">1</span>) content)</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>           f (<span class="dt">Right</span> x) <span class="ot">=</span> <span class="dt">Right</span> x</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>       modify f</span></code></pre></div>
+<h2 id="what-is-texty">what is texty?</h2>
+<p>Composable parsers, like with parser combinators, but</p>
+<ul>
+<li><strong>partial</strong>: no full parse if not necessary
+<ul>
+<li>e.g. in markdown: don’t parse the italic inside the header if you are only interested in the raw text inside, but otherwise do if you need to transform it</li>
+</ul>
+<pre><code>&quot;# *i*\n&quot;</code></pre></li>
+<li><strong>bidirectional</strong>: parse and render</li>
+<li><strong>fuses</strong> parse/transform/render passes into one</li>
+<li><strong>optics</strong>-based: define traversal targets and modifications orthogonally</li>
+</ul>
+<h3 id="naive-approaches">naive approaches</h3>
+<p>If you were to do partial parsing in a naive way, you might define</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Markdown</span> <span class="ot">=</span> <span class="dt">Markdown</span> [ <span class="dt">Line</span> ]</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Line</span> <span class="ot">=</span> <span class="dt">Header</span> <span class="dt">Int</span> [<span class="dt">Inline</span>] <span class="op">|</span> <span class="dt">Line</span> [<span class="dt">Inline</span>]</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Inline</span> <span class="ot">=</span> <span class="dt">Plain</span> <span class="dt">Text</span> <span class="op">|</span> <span class="dt">Italic</span> <span class="dt">Text</span></span></code></pre></div>
+<p>if you were interested in italics inside headers, or</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Markdown</span> <span class="ot">=</span> <span class="dt">Markdown</span> [ <span class="dt">Line</span> ]</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Line</span> <span class="ot">=</span> <span class="dt">Header</span> <span class="dt">Int</span> <span class="dt">Text</span> <span class="op">|</span> <span class="dt">Line</span> <span class="dt">Text</span></span></code></pre></div>
+<p>if you were only interested in headers, not italics.</p>
+<p>So unless you are prepared to define a separate such type for each specific markdown transformation task you want to do, in order to handle all possible scenarios, you would need to instead define a type upfront for the full markdown syntax. And you would be forced to work with other parts of the markdown tree you are not interested in for each specific task.</p>
+<p>So a naive approach would be to do:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Markdown</span> <span class="ot">=</span> <span class="dt">Markdown</span> [ <span class="dt">Line</span> ]</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Line</span> <span class="ot">=</span> <span class="dt">Header</span> <span class="dt">Int</span> [<span class="dt">Inline</span>] <span class="op">|</span> <span class="dt">Line</span> [<span class="dt">Inline</span>]</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Inline</span> <span class="ot">=</span> <span class="dt">Plain</span> <span class="dt">Text</span> <span class="op">|</span> <span class="dt">Italic</span> <span class="dt">Text</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="ot">parseItalic ::</span> <span class="dt">Parser</span> <span class="dt">Text</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="ot">parseHeader ::</span> <span class="dt">Parser</span> (<span class="dt">Int</span>, <span class="dt">Inline</span>)</span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="ot">parseInline ::</span> <span class="dt">Parser</span> <span class="dt">Inline</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>parseInline <span class="ot">=</span> <span class="dt">Italic</span> <span class="op">&lt;$&gt;</span> parseItalic <span class="op">&lt;|&gt;</span> parsePlainText</span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a><span class="ot">parseLine ::</span> <span class="dt">Parser</span> <span class="dt">Line</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>parseLine <span class="ot">=</span> (<span class="fu">uncurry</span> <span class="dt">Header</span> <span class="op">&lt;$&gt;</span> parseHeader) <span class="op">&lt;|&gt;</span> (<span class="dt">Line</span> <span class="op">&lt;$&gt;</span> parseInline)</span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>parseMarkdown <span class="ot">=</span> <span class="dt">Markdown</span> <span class="op">&lt;$&gt;</span> many parseLine</span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a><span class="op">...</span></span></code></pre></div>
+<p>with even more definitions for functions transforming and rendering the parse tree, each of which is coupled to the specific definition of <code>Markdown</code> for the specific the markdown elements you were interested in only because of some specific transformation you wanted to perform.</p>
+<p>You could use recursion schemes or lenses/optics to factor out the folds of transformation and rendering, that saves some code and decouples the rendering/transform from traversals. But you would sill need to make separate passes for parse, transform, and render.</p>
+<p>And this is assuming there <em>is</em> a task-neutral universal representation of markdown, which is doubtful. Consider for example, what is needed if you wanted to associate body text to the header it is under? Your definitions would have to be changed to</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Markdown</span> <span class="ot">=</span> <span class="dt">Markdown</span> [ <span class="dt">Section</span> ]</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Section</span> <span class="ot">=</span> <span class="dt">Section</span> <span class="dt">Int</span> [<span class="dt">Inline</span>] [<span class="dt">Line</span>]</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Line</span> <span class="ot">=</span> <span class="dt">Line</span> [<span class="dt">Inline</span>]</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Inline</span> <span class="ot">=</span> <span class="dt">Plain</span> <span class="dt">Text</span> <span class="op">|</span> <span class="dt">Italic</span> <span class="dt">Text</span></span></code></pre></div>
+<p>Notice how except for <code>Inline</code> all the other data definitions are affected as well.</p>
+<p>And what if you wanted to do <em>both</em> in the same task? Then you would have to pick the stronger representation and settle for it being harder to work with for the simpler operation!</p>
+<p>For example, if you wanted to unindent top-level bullets into subheaders of their own, in order to decide their sub-level you need to know the level of the header for their section, and use 1 more than that, so that your new headers fall under the same section:</p>
+<ul>
+<li>for getting the level, the content-associated header representation works best,</li>
+</ul>
+<div class="sourceCode" id="cb7"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Section</span> <span class="ot">=</span> <span class="dt">Section</span> <span class="dt">Int</span> [<span class="dt">Inline</span>] [<span class="dt">Line</span>]</span></code></pre></div>
+<ul>
+<li>but for the unindent operation itself, the header-as-simply-a-special-line representation works best</li>
+</ul>
+<div class="sourceCode" id="cb8"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Line</span> <span class="ot">=</span> <span class="dt">Header</span> <span class="dt">Int</span> [<span class="dt">Inline</span>] <span class="op">|</span> <span class="dt">Line</span> [<span class="dt">Inline</span>]</span></code></pre></div>
+<h3 id="a-better-way">a better way</h3>
+<p>What if, instead, the only non-coupled data types you need are</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">newtype</span> <span class="dt">Header</span> <span class="ot">=</span> <span class="dt">Header</span> <span class="dt">Int</span> <span class="dt">Text</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="kw">newtype</span> <span class="dt">Italic</span> <span class="ot">=</span> <span class="dt">Italic</span> <span class="dt">Text</span></span></code></pre></div>
+<p>? And you can just add more for your specific use case, and it won’t affect the others?</p>
+<p>And for the parsing/transforming you can simply define</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="ot">i ::</span> <span class="dt">PPrism</span> <span class="dt">Text</span> <span class="dt">Italic</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>i <span class="ot">=</span> pPrism parse render</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>  <span class="kw">where</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>    parse <span class="ot">=</span> <span class="dt">Italic</span> <span class="op">.</span> <span class="fu">pack</span> <span class="op">&lt;$&gt;</span> withinMany (char <span class="ch">'*'</span>) (noneOf ([<span class="ch">'*'</span>]))</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>    render (<span class="dt">Italic</span> txt) <span class="ot">=</span> (<span class="st">&quot;*&quot;</span> <span class="op">&lt;&gt;</span> txt <span class="op">&lt;&gt;</span> <span class="st">&quot;*&quot;</span>)</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a><span class="ot">h ::</span> <span class="dt">Int</span> <span class="ot">-&gt;</span>  <span class="dt">PPrism</span> <span class="dt">Text</span> <span class="dt">Header</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>h n <span class="ot">=</span> pPrism parse render</span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a><span class="co">-- similarly parse/render definitions for header ...</span></span></code></pre></div>
+<p>? And if you are only interested in transforming the header, then you can do</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>λ set (text <span class="op">.</span> h <span class="dv">1</span> <span class="op">.</span> _1 <span class="op">.</span> content) <span class="st">&quot;hello&quot;</span> <span class="st">&quot;# *i*\n&quot;</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;# hello</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;</span></span></code></pre></div>
+<p>? And if you are interested in the italic inside of the header, you can just do</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>λ set (text <span class="op">.</span> h <span class="dv">1</span> <span class="op">.</span> focus content <span class="op">.</span> i <span class="op">.</span> _1 <span class="op">.</span> unItalic) <span class="st">&quot;hello&quot;</span> <span class="st">&quot;# *i*\n&quot;</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;# *hello*</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;</span></span></code></pre></div>
+<p>?</p>
+<p>Composability! And all this in a one-pass traversal of the text!</p>
+</section>
+</article>
+
+        </div>
+        <div id="footer">
+            Site proudly generated by
+            <a href="http://jaspervdj.be/hakyll">Hakyll</a>
+        </div>
+    </body>
+</html>
