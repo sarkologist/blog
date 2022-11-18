@@ -343,7 +343,7 @@ Let's be clear on what we need
 				- which would parse `# *i ~~s~~\n`
 		- this is what
 
-            unconsumed_top = fromMaybe unconsumed (abv !? lvl_s)`
+            unconsumed_top = fromMaybe unconsumed (abv !? lvl_s)
 
 		  does. Where `lvl_s` indexes into our stack of parent unconsumed `abv`.
 - if the right has consumed additional input, we must remove this portion from the unconsumed input of the left
