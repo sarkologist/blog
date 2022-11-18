@@ -380,22 +380,22 @@ We use the `Pair` product applicative as before to gather information we need:
 - in the left case we need unconsumed input information
 	- we automatically get parse-success information by just the `Last` monoid
 	- it returns the "rightmost" last element of the traversal
-		- why the rightmost?
-			- in the case the left is not focused, it might still be a shallow traversal of multiple parse targets
-			- for example `many italic` parses many adjacent occurences of italics, and
+	- why the rightmost?
+		- in the case the left is not focused, it might still be a shallow traversal of multiple parse targets
+		- for example `many italic` parses many adjacent occurences of italics, and
 
-			      ("*i1**i2* unconsumed", Context "" [] 0)
+			    ("*i1**i2* unconsumed", Context "" [] 0)
 
-            gets parsed into
+          gets parsed into
 
-                (Italic "i1", Context "*i2* unconsumed" [] 0)
+              (Italic "i1", Context "*i2* unconsumed" [] 0)
 
-            and
+          and
 
-                (Italic "i2", Context " unconsumed" [] 0)
+              (Italic "i2", Context " unconsumed" [] 0)
 
-			- each occurence of which was passed the unconsumed input of the previous on the left
-			- so to get the unconsumed of the parent, in this case `many italic`, we want to look at the unconsumed of the last child, in this case `" unconsumed" ` for `Italic "i2"`
+		- each occurence of which was passed the unconsumed input of the previous on the left
+		- so to get the unconsumed of the parent, in this case `many italic`, we want to look at the unconsumed of the last child, in this case `" unconsumed" ` for `Italic "i2"`
 - in the right case we just need to know if it succeeded, so we use `Const Any` like in the `<||>` case
 
 The `merge` helper function is for the render phase: it makes sure the parent `Text` of the right and its unconsumed input are properly concatenated after the text that has been rendered for the left.

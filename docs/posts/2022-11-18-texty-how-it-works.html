@@ -340,20 +340,18 @@
 <li>in the left case we need unconsumed input information
 <ul>
 <li>we automatically get parse-success information by just the <code>Last</code> monoid</li>
-<li>it returns the “rightmost” last element of the traversal
-<ul>
+<li>it returns the “rightmost” last element of the traversal</li>
 <li>why the rightmost?
 <ul>
 <li><p>in the case the left is not focused, it might still be a shallow traversal of multiple parse targets</p></li>
 <li><p>for example <code>many italic</code> parses many adjacent occurences of italics, and</p>
-<pre><code>(&quot;*i1**i2* unconsumed&quot;, Context &quot;&quot; [] 0)</code></pre>
+<pre><code>  (&quot;*i1**i2* unconsumed&quot;, Context &quot;&quot; [] 0)</code></pre>
 <p>gets parsed into</p>
-<pre><code>(Italic &quot;i1&quot;, Context &quot;*i2* unconsumed&quot; [] 0)</code></pre>
+<pre><code>  (Italic &quot;i1&quot;, Context &quot;*i2* unconsumed&quot; [] 0)</code></pre>
 <p>and</p>
-<pre><code>(Italic &quot;i2&quot;, Context &quot; unconsumed&quot; [] 0)</code></pre></li>
+<pre><code>  (Italic &quot;i2&quot;, Context &quot; unconsumed&quot; [] 0)</code></pre></li>
 <li><p>each occurence of which was passed the unconsumed input of the previous on the left</p></li>
 <li><p>so to get the unconsumed of the parent, in this case <code>many italic</code>, we want to look at the unconsumed of the last child, in this case <code>" unconsumed"</code> for <code>Italic "i2"</code></p></li>
-</ul></li>
 </ul></li>
 </ul></li>
 <li>in the right case we just need to know if it succeeded, so we use <code>Const Any</code> like in the <code>&lt;||&gt;</code> case</li>
