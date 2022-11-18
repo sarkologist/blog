@@ -6,7 +6,7 @@ description: "Part 1: Composable, partial, fused, parse-transform-render travers
 ---
 
 ## teaser
-![](https://media.giphy.com/media/B5KgFe6s0rGUjSkMtL/giphy.gif)
+![](https://media.giphy.com/media/B5KgFe6s0rGUjSkMtL/giphy.mp4){loop=""}
 
 Do you sometimes feel you have added too many bullet points, and that each top level bullet should be its own heading, with child bullets a new section under that heading? And of course they should be *subheadings* of the heading all the bullets were originally a section of.
 
