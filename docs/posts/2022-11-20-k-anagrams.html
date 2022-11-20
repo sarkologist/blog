@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+        <title>free as in left adjoint - k-anagrams</title>
+        <link rel="stylesheet" type="text/css" href="../css/default.css" />
+    </head>
+    <body>
+        <div id="header">
+            <div id="logo">
+                <a href="../">free as in left adjoint</a>
+            </div>
+            <div id="navigation">
+                <a href="../">Home</a>
+                <a href="../about.html">About</a>
+                <a href="../contact.html">Contact</a>
+                <a href="../archive.html">Archive</a>
+            </div>
+        </div>
+
+        <div id="content">
+            <h1>k-anagrams</h1>
+            
+            <h2>group structure of the integers, and a small rant on coding interviews</h2>
+            
+
+            <article>
+<div class="info">
+    Posted on November 20, 2022
+    
+        by Guo Liang Oon
+    
+</div>
+<section>
+<h2 id="coding-interviews">coding interviews</h2>
+<p>I am not a fan of coding interviews.</p>
+<p>When I was hiring, I gave candidates a take home test, and then in the live interview discussed their solution and have them work through a modification to that solution. This is to relieve them of time pressure and allow them the space to thoroughly familiarise themselves with the problem. The subsequent live discussion and modification then serves only as a casual check that they did not just plagiarise someone else’s work.</p>
+<p>We often deliver code according to a deadline it is true, but this deadline is not the short amount of time of a coding interview. Most of doing well in coding interviews comes down to being familiar with the problems and meaningless coding micro-fluency, than from any real problem solving or deep programming ability.</p>
+<p>My opinions on coding interviews aside, I found the k-anagram problem to be quite interesting, and not for the usual reasons.</p>
+<h2 id="k-anagrams">k-anagrams</h2>
+<p>Here is the problem statement:</p>
+<blockquote>
+<p>Given two strings of lowercase alphabets and a value k, the task is to find if two strings are k-anagrams of each other or not.</p>
+<p>Two strings are k-anagrams of each other if they can become anagrams by replacing at most k characters in a string.</p>
+<p>Implement a function <code>isKAnagram</code> that returns true if the two strings are k-anagram, or false if they are not.</p>
+</blockquote>
+<p>Not everything in a problem statement is relevant to the heart of the problem itself:</p>
+<ul>
+<li>lowercase/uppercase doesn’t matter: the problem is about whether two <code>Char</code> are equal
+<ul>
+<li>we can always normalise to lowercase first before running the algorithm</li>
+</ul></li>
+<li>an “anagram” is a special case of a <code>k</code>-anagram: a <code>0</code>-anagram</li>
+<li>we can first compute how many replacements are necessary, then check if it is less than or equal to the <code>k</code> we want</li>
+<li>symmetry
+<ul>
+<li>if <code>a</code> takes <code>k</code> replacements to be an anagram of <code>b</code>, then so does <code>b</code> take <code>k</code> replacements to be an anagram of <code>a</code></li>
+</ul></li>
+</ul>
+<p>So we can focus on counting replacements necessary.</p>
+<p>Replacements are necessary either when <code>a</code> has a letter not present in <code>b</code> or vice versa (recall symmetry). Note that a word may contain more than one occurence of the same latter, so we are checking for presence-with-multiplicity.</p>
+<p>Sometimes the essence of the problem becomes clearer when we focus on simplifications of it.</p>
+<p>Assume the strings <code>a</code> and <code>b</code> comes pre-sorted according dictionary ordering of <code>Char</code>. Then counting for replacements necessary becomes easier:</p>
+<ul>
+<li><code>anagram</code> sorted becomes <code>aaagmnr</code></li>
+<li><code>grammar</code> sorted becomes <code>aagmmrr</code></li>
+<li>read through both strings from left to right
+<ul>
+<li>we can match up 2 <code>a</code>s from each, leaving 1 extra <code>a</code>
+<ul>
+<li><code>agmnr</code></li>
+<li><code>gmmrr</code></li>
+</ul></li>
+<li>discard the extra <code>a</code>
+<ul>
+<li><code>gmnr</code></li>
+<li><code>gmmrr</code></li>
+</ul></li>
+<li>match 1 <code>g</code>, nothing extra, nothing missing
+<ul>
+<li><code>mnr</code></li>
+<li><code>mmrr</code></li>
+</ul></li>
+<li>match 1 <code>m</code>, 1 missing <code>m</code>
+<ul>
+<li><code>nr</code></li>
+<li><code>rr</code></li>
+</ul></li>
+<li>match 0 <code>n</code>, 1 extra <code>n</code>
+<ul>
+<li><code>r</code></li>
+<li><code>rr</code></li>
+</ul></li>
+<li>match 1 <code>r</code>, 1 missing <code>r</code></li>
+</ul></li>
+</ul>
+<p>So we have extras <code>a</code> and <code>n</code> and missings <code>m</code> and <code>r</code>. But recall that the situation is symmetric. We can either replace the letters of the first string to match that of the right, or vice versa.</p>
+<p>So our problem is really about matching the <code>Char</code>s of both strings. But what is matching but a form of iterative “cancelling”? To put it in more visually stark terms, take the 3 <code>a</code>s from <code>anagram</code> and 2 <code>a</code>s from <code>grammar</code></p>
+<pre><code>--&gt; aaa | aa &lt;--</code></pre>
+<p>We can imagine the left string moving to the right, and the right string moving to the left, and if they match they “cancel out”. So the next step becomes</p>
+<pre><code>aa | a</code></pre>
+<p>And the next</p>
+<pre><code>a |</code></pre>
+<p>So we have 1 <code>a</code> remaining, and that means we have 1 extra <code>a</code>.</p>
+<p>Similarly, for <code>m</code></p>
+<pre><code>--&gt; m | mm &lt;--</code></pre>
+<p>becomes</p>
+<pre><code>| m</code></pre>
+<p>Which means we have 1 missing <code>m</code>.</p>
+<p>Now because of the symmetry of the problem, we don’t really care whether it is “missing” or “extra”. But before we are done with the counting, we cannot know ahead of time if we will have remaining letters on the left or on the right. So we have to be consistent, and always place letters from the second string on the right, and letters from the first string on the left.</p>
+<p>More abstractly, this is simply the group structure of the integers! “Extra” corresponds to the positive integers, and “missing” corresponds to the negative integers.</p>
+<p>So we can implement</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="ot">unmatchedCount ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">Maybe</span> (<span class="dt">Map</span> <span class="dt">Char</span> <span class="dt">Int</span>)</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>unmatchedCount a b <span class="ot">=</span> go a b M.empty</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="kw">where</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>    go (a<span class="op">:</span>as) (b<span class="op">:</span>bs) acc <span class="ot">=</span> go as bs</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>       <span class="op">$</span> M.insertWith (<span class="op">+</span>) a <span class="dv">1</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>       <span class="op">$</span> M.insertWith (<span class="op">+</span>) b (<span class="op">-</span><span class="dv">1</span>)</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>       <span class="op">$</span> acc</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    go [] [] acc <span class="ot">=</span> <span class="dt">Just</span> acc</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>    go _ _ _ <span class="ot">=</span> <span class="dt">Nothing</span></span></code></pre></div>
+<p>which counts for each letter their <em>surplus</em> or <em>deficit</em> in the left vs. the right string.</p>
+<p>We arbitrarily pick <code>b</code> (remember: symmetry) to be negative and let the letter counts cancel each other out.</p>
+<p>So <code>unmatchedCount "anagram" "grammar"</code> gives</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="dt">Just</span> (fromList [(<span class="ch">'a'</span>,<span class="dv">1</span>),(<span class="ch">'g'</span>,<span class="dv">0</span>),(<span class="ch">'m'</span>,<span class="op">-</span><span class="dv">1</span>),(<span class="ch">'n'</span>,<span class="dv">1</span>),(<span class="ch">'r'</span>,<span class="op">-</span><span class="dv">1</span>)])</span></code></pre></div>
+<p>The</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>go _ _ _ <span class="ot">=</span> <span class="dt">Nothing</span></span></code></pre></div>
+<p>case simply gives up ASAP if we know the strings are of unequal length, since we know they cannot be anagrams, let alone k-anagrams.</p>
+<p>To count the number of replacements needed we simply sum across all the counts, but taking their absolute value with <code>abs</code>, since again by symmetry of the problem we don’t care if it is a surplus or deficit.</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="ot">replacementsNeeded ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">Maybe</span> <span class="dt">Int</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>replacementsNeeded a b <span class="ot">=</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>  <span class="kw">case</span> unmatchedCount a b <span class="kw">of</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>    <span class="dt">Just</span> d <span class="ot">-&gt;</span> </span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>      <span class="kw">let</span> <span class="dt">Sum</span> count <span class="ot">=</span> <span class="fu">foldMap</span> (<span class="dt">Sum</span> <span class="op">.</span> <span class="fu">abs</span>) d</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>          (q, r) <span class="ot">=</span> <span class="fu">quotRem</span> count <span class="dv">2</span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>      <span class="kw">in</span> <span class="kw">if</span> r <span class="op">==</span> <span class="dv">0</span> <span class="kw">then</span> <span class="dt">Just</span> q <span class="kw">else</span> <span class="dt">Nothing</span></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>    <span class="dt">Nothing</span> <span class="ot">-&gt;</span> <span class="dt">Nothing</span></span></code></pre></div>
+<p>Again by symmetry, we will double-count replacements needed, so we divide by 2. We know that the strings are of equal length if we get a <code>Just</code> case since <code>unmatchedCount</code> checks it for us, but just to be safe with use Euclid’s algorithm and work with the quotient and remainder.</p>
+<p>We could have also simply summed over only the positive values, since again by symmetry for every <em>excess</em> there is a corresponding <em>lack</em> of equal magnitude, but filtering is no simpler or more efficient than simply taking the absolute value of everything and dividing by 2.</p>
+<p>Finally checking for <code>k</code>-anagram status is simply a matter of checking if the replacements needed are within the <code>k</code> quota provided</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="ot">isKAnagram ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Bool</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>isKAnagram a b k <span class="ot">=</span> <span class="fu">maybe</span> <span class="dt">False</span> (<span class="op">&lt;=</span> k) <span class="op">$</span> replacementsNeeded a b</span></code></pre></div>
+<p>We can also make the group structure a bit more explicit by doing</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> <span class="dt">Monoid</span> k <span class="ot">=&gt;</span> <span class="dt">Group</span> k <span class="kw">where</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="ot">  invert ::</span> k <span class="ot">-&gt;</span> k</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  <span class="co">-- law: invert . invert = id</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>  <span class="co">-- law: (\x -&gt; x &lt;&gt; invert x) a == mempty</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> <span class="dt">Num</span> a <span class="ot">=&gt;</span> <span class="dt">Group</span> (<span class="dt">Sum</span> a) <span class="kw">where</span></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>  invert (<span class="dt">Sum</span> a) <span class="ot">=</span> <span class="dt">Sum</span> (<span class="fu">negate</span> a)</span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a><span class="kw">newtype</span> <span class="dt">MergeMap</span> k v <span class="ot">=</span> <span class="dt">MergeMap</span> (<span class="dt">Map</span> k v) <span class="kw">deriving</span> (<span class="dt">Eq</span>, <span class="dt">Show</span>)</span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> (<span class="dt">Ord</span> k, <span class="dt">Semigroup</span> v) <span class="ot">=&gt;</span> <span class="dt">Semigroup</span> (<span class="dt">MergeMap</span> k v) <span class="kw">where</span></span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>  <span class="dt">MergeMap</span> l <span class="op">&lt;&gt;</span> <span class="dt">MergeMap</span> k <span class="ot">=</span> <span class="dt">MergeMap</span> <span class="op">$</span> M.unionWith (<span class="op">&lt;&gt;</span>) l k</span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a><span class="ot">isKAnagram ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Bool</span></span>
+<span id="cb11-15"><a href="#cb11-15" aria-hidden="true" tabindex="-1"></a>isKAnagram a b k <span class="ot">=</span> <span class="fu">maybe</span> <span class="dt">False</span> (<span class="op">&lt;=</span> k) <span class="op">$</span> replacementsNeeded a b</span>
+<span id="cb11-16"><a href="#cb11-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-17"><a href="#cb11-17" aria-hidden="true" tabindex="-1"></a><span class="ot">replacementsNeeded ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">Maybe</span> <span class="dt">Int</span></span>
+<span id="cb11-18"><a href="#cb11-18" aria-hidden="true" tabindex="-1"></a>replacementsNeeded a b <span class="ot">=</span></span>
+<span id="cb11-19"><a href="#cb11-19" aria-hidden="true" tabindex="-1"></a>  <span class="kw">case</span> unmatchedCount a b <span class="kw">of</span></span>
+<span id="cb11-20"><a href="#cb11-20" aria-hidden="true" tabindex="-1"></a>    <span class="dt">Just</span> (<span class="dt">MergeMap</span> d) <span class="ot">-&gt;</span> </span>
+<span id="cb11-21"><a href="#cb11-21" aria-hidden="true" tabindex="-1"></a>      <span class="kw">let</span> <span class="dt">Sum</span> count <span class="ot">=</span> <span class="fu">foldMap</span> (<span class="fu">fmap</span> <span class="fu">abs</span>) d</span>
+<span id="cb11-22"><a href="#cb11-22" aria-hidden="true" tabindex="-1"></a>          (q, r) <span class="ot">=</span> <span class="fu">quotRem</span> count <span class="dv">2</span></span>
+<span id="cb11-23"><a href="#cb11-23" aria-hidden="true" tabindex="-1"></a>      <span class="kw">in</span> <span class="kw">if</span> r <span class="op">==</span> <span class="dv">0</span> <span class="kw">then</span> <span class="dt">Just</span> q <span class="kw">else</span> <span class="dt">Nothing</span></span>
+<span id="cb11-24"><a href="#cb11-24" aria-hidden="true" tabindex="-1"></a>    <span class="dt">Nothing</span> <span class="ot">-&gt;</span> <span class="dt">Nothing</span></span>
+<span id="cb11-25"><a href="#cb11-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-26"><a href="#cb11-26" aria-hidden="true" tabindex="-1"></a><span class="ot">unmatchedCount ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">Maybe</span> (<span class="dt">MergeMap</span> <span class="dt">Char</span> (<span class="dt">Sum</span> <span class="dt">Int</span>))</span>
+<span id="cb11-27"><a href="#cb11-27" aria-hidden="true" tabindex="-1"></a>unmatchedCount <span class="ot">=</span> go (<span class="dt">MergeMap</span> M.empty)</span>
+<span id="cb11-28"><a href="#cb11-28" aria-hidden="true" tabindex="-1"></a>  <span class="kw">where</span></span>
+<span id="cb11-29"><a href="#cb11-29" aria-hidden="true" tabindex="-1"></a>    go acc (a<span class="op">:</span>as) (b<span class="op">:</span>bs) <span class="ot">=</span></span>
+<span id="cb11-30"><a href="#cb11-30" aria-hidden="true" tabindex="-1"></a>        <span class="kw">let</span> updated <span class="ot">=</span> acc</span>
+<span id="cb11-31"><a href="#cb11-31" aria-hidden="true" tabindex="-1"></a>              <span class="op">&lt;&gt;</span> <span class="dt">MergeMap</span> (M.singleton a (<span class="dt">Sum</span> <span class="dv">1</span>))</span>
+<span id="cb11-32"><a href="#cb11-32" aria-hidden="true" tabindex="-1"></a>              <span class="op">&lt;&gt;</span> <span class="dt">MergeMap</span> (M.singleton b (invert (<span class="dt">Sum</span> <span class="dv">1</span>)))</span>
+<span id="cb11-33"><a href="#cb11-33" aria-hidden="true" tabindex="-1"></a>        <span class="kw">in</span> go updated as bs</span>
+<span id="cb11-34"><a href="#cb11-34" aria-hidden="true" tabindex="-1"></a>      </span>
+<span id="cb11-35"><a href="#cb11-35" aria-hidden="true" tabindex="-1"></a>    go acc [] [] <span class="ot">=</span> <span class="dt">Just</span> acc</span>
+<span id="cb11-36"><a href="#cb11-36" aria-hidden="true" tabindex="-1"></a>    go _   _  _  <span class="ot">=</span> <span class="dt">Nothing</span></span></code></pre></div>
+</section>
+</article>
+
+        </div>
+        <div id="footer">
+            Site proudly generated by
+            <a href="http://jaspervdj.be/hakyll">Hakyll</a>
+        </div>
+    </body>
+</html>
