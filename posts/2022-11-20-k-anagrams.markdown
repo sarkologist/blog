@@ -38,7 +38,7 @@ Replacements are necessary either when `a` has a letter not present in `b` or vi
 
 Sometimes the essence of the problem becomes clearer when we focus on simplifications of it.
 
-Assume the strings `a` and `b` comes pre-sorted according dictionary ordering of `Char`. Then counting for replacements necessary becomes easier:
+Assume the strings `a` and `b` comes pre-sorted according alphabetical ordering of `Char`. Then counting for replacements necessary becomes easier:
 
 - `anagram` sorted becomes `aaagmnr`
 - `grammar` sorted becomes `aagmmrr`
