@@ -219,3 +219,5 @@ Here we take advantage of
 We don't actually need `IntMap.Lazy`: it's there just to demonstrate that we don't in fact evaluate more entries than is necessary.
 
 Note that we cannot terminate earlier than this (in `unmatchedCount`), as we need to wait for all the counting to be done to know if there is an excess or deficit.
+
+And of course, we can never terminate early for the positive case of a true k-anagram, since *all* letter excess/deficits need to be within our k-quota. It's the old contrast between proving a universal, and providing a counterexample.
