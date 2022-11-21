@@ -181,23 +181,26 @@ unmatchedCount = go (MergeMap M.empty)
 
 If we are feeling particularly perverse, we can even optimise to terminate early as soon as some letter count exceeds `k`
 ```haskell
-import Data.IntMap.Lazy as M
+import Data.IntMap.Lazy as M -- only needed for demonstration of early termination if >k
 import Data.Char
 
 main = do
   -- demonstration of early termination if >k
-  print $ checkExceeds 0 $ M.fromList [(0,1), (1,undefined)]
+  print $ checkExceeds 0 $ M.fromList [(0 ,1), (1,undefined)]
+  print $ checkExceeds 0 $ M.fromList [(0,-1), (1,undefined)]
 
 isKAnagram :: String -> String -> Int -> Bool
 isKAnagram a b k = maybe False (checkExceeds k) $ unmatchedCount a b
 
 checkExceeds :: Int -> IntMap Int -> Bool
--- list fusion happens
-checkExceeds k = all snd . scanl count ((0,0),True) . elems
+checkExceeds k =
+     all (\(quota,quota') -> quota >= 0 && quota' <= 0)
+   . scanl count (k,-k)
+   . elems -- list fusion happens
   where
-    count ((more,less),_) x | x > 0 = ((more+x, less  ), more+x <= k)
-    count ((more,less),_) x | x < 0 = ((x     , less-x), less-x >= -k)
-    count acc             _         = acc
+    count (quota,quota') x | x > 0 = (quota - x, quota')
+    count (quota,quota') x | x < 0 = (quota    , quota' - x)
+    count acc                _     = acc
 
 unmatchedCount :: String -> String -> Maybe (IntMap Int)
 unmatchedCount a b = go a b M.empty
@@ -210,11 +213,7 @@ unmatchedCount a b = go a b M.empty
     go _ _ _ = Nothing
 ```
 
-Here we take advantage of
-
-- list fusion provided by `IntMap.elems`
-  - this lets us make one pass on the `IntMap` values, despite doing `elems`, `scanl` and `all` on them
-- short-circuit boolean `(&&)` evaluation of `all`
+Here we take advantage of the list fusion provided by `IntMap.elems`: it lets us make a one-pass on the `IntMap` values, despite doing `elems`, `scanl` and `all` on them
 
 We don't actually need `IntMap.Lazy`: it's there just to demonstrate that we don't in fact evaluate more entries than is necessary.
 

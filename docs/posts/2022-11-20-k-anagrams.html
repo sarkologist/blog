@@ -179,41 +179,37 @@
 <span id="cb11-35"><a href="#cb11-35" aria-hidden="true" tabindex="-1"></a>    go acc [] [] <span class="ot">=</span> <span class="dt">Just</span> acc</span>
 <span id="cb11-36"><a href="#cb11-36" aria-hidden="true" tabindex="-1"></a>    go _   _  _  <span class="ot">=</span> <span class="dt">Nothing</span></span></code></pre></div>
 <p>If we are feeling particularly perverse, we can even optimise to terminate early as soon as some letter count exceeds <code>k</code></p>
-<div class="sourceCode" id="cb12"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="dt">Data.IntMap.Lazy</span> <span class="kw">as</span> <span class="dt">M</span></span>
+<div class="sourceCode" id="cb12"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="dt">Data.IntMap.Lazy</span> <span class="kw">as</span> <span class="dt">M</span> <span class="co">-- only needed for demonstration of early termination if &gt;k</span></span>
 <span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="dt">Data.Char</span></span>
 <span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>main <span class="ot">=</span> <span class="kw">do</span></span>
 <span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>  <span class="co">-- demonstration of early termination if &gt;k</span></span>
-<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span> <span class="op">$</span> checkExceeds <span class="dv">0</span> <span class="op">$</span> M.fromList [(<span class="dv">0</span>,<span class="dv">1</span>), (<span class="dv">1</span>,<span class="fu">undefined</span>)]</span>
-<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a><span class="ot">isKAnagram ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Bool</span></span>
-<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>isKAnagram a b k <span class="ot">=</span> <span class="fu">maybe</span> <span class="dt">False</span> (checkExceeds k) <span class="op">$</span> unmatchedCount a b</span>
-<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a><span class="ot">checkExceeds ::</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">IntMap</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Bool</span></span>
-<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a><span class="co">-- list fusion happens</span></span>
-<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a>checkExceeds k <span class="ot">=</span> <span class="fu">all</span> <span class="fu">snd</span> <span class="op">.</span> <span class="fu">scanl</span> count ((<span class="dv">0</span>,<span class="dv">0</span>),<span class="dt">True</span>) <span class="op">.</span> elems</span>
-<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a>  <span class="kw">where</span></span>
-<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a>    count ((more,less),_) x <span class="op">|</span> x <span class="op">&gt;</span> <span class="dv">0</span> <span class="ot">=</span> ((more<span class="op">+</span>x, less  ), more<span class="op">+</span>x <span class="op">&lt;=</span> k)</span>
-<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a>    count ((more,less),_) x <span class="op">|</span> x <span class="op">&lt;</span> <span class="dv">0</span> <span class="ot">=</span> ((x     , less<span class="op">-</span>x), less<span class="op">-</span>x <span class="op">&gt;=</span> <span class="op">-</span>k)</span>
-<span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a>    count acc             _         <span class="ot">=</span> acc</span>
-<span id="cb12-18"><a href="#cb12-18" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-19"><a href="#cb12-19" aria-hidden="true" tabindex="-1"></a><span class="ot">unmatchedCount ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">Maybe</span> (<span class="dt">IntMap</span> <span class="dt">Int</span>)</span>
-<span id="cb12-20"><a href="#cb12-20" aria-hidden="true" tabindex="-1"></a>unmatchedCount a b <span class="ot">=</span> go a b M.empty</span>
-<span id="cb12-21"><a href="#cb12-21" aria-hidden="true" tabindex="-1"></a>  <span class="kw">where</span></span>
-<span id="cb12-22"><a href="#cb12-22" aria-hidden="true" tabindex="-1"></a>    go (a<span class="op">:</span>as) (b<span class="op">:</span>bs) acc <span class="ot">=</span> go as bs</span>
-<span id="cb12-23"><a href="#cb12-23" aria-hidden="true" tabindex="-1"></a>      <span class="op">$</span> M.insertWith (<span class="op">+</span>) (<span class="fu">ord</span> a) <span class="dv">1</span></span>
-<span id="cb12-24"><a href="#cb12-24" aria-hidden="true" tabindex="-1"></a>      <span class="op">$</span> M.insertWith (<span class="op">+</span>) (<span class="fu">ord</span> b) (<span class="op">-</span><span class="dv">1</span>)</span>
-<span id="cb12-25"><a href="#cb12-25" aria-hidden="true" tabindex="-1"></a>      <span class="op">$</span> acc</span>
-<span id="cb12-26"><a href="#cb12-26" aria-hidden="true" tabindex="-1"></a>    go [] [] acc <span class="ot">=</span> <span class="dt">Just</span> acc</span>
-<span id="cb12-27"><a href="#cb12-27" aria-hidden="true" tabindex="-1"></a>    go _ _ _ <span class="ot">=</span> <span class="dt">Nothing</span></span></code></pre></div>
-<p>Here we take advantage of</p>
-<ul>
-<li>list fusion provided by <code>IntMap.elems</code>
-<ul>
-<li>this lets us make one pass on the <code>IntMap</code> values, despite doing <code>elems</code>, <code>scanl</code> and <code>all</code> on them</li>
-</ul></li>
-<li>short-circuit boolean <code>(&amp;&amp;)</code> evaluation of <code>all</code></li>
-</ul>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span> <span class="op">$</span> checkExceeds <span class="dv">0</span> <span class="op">$</span> M.fromList [(<span class="dv">0</span> ,<span class="dv">1</span>), (<span class="dv">1</span>,<span class="fu">undefined</span>)]</span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span> <span class="op">$</span> checkExceeds <span class="dv">0</span> <span class="op">$</span> M.fromList [(<span class="dv">0</span>,<span class="op">-</span><span class="dv">1</span>), (<span class="dv">1</span>,<span class="fu">undefined</span>)]</span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a><span class="ot">isKAnagram ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Bool</span></span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>isKAnagram a b k <span class="ot">=</span> <span class="fu">maybe</span> <span class="dt">False</span> (checkExceeds k) <span class="op">$</span> unmatchedCount a b</span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a><span class="ot">checkExceeds ::</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">IntMap</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Bool</span></span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a>checkExceeds k <span class="ot">=</span></span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a>     <span class="fu">all</span> (\(quota,quota') <span class="ot">-&gt;</span> quota <span class="op">&gt;=</span> <span class="dv">0</span> <span class="op">&amp;&amp;</span> quota' <span class="op">&lt;=</span> <span class="dv">0</span>)</span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a>   <span class="op">.</span> <span class="fu">scanl</span> count (k,<span class="op">-</span>k)</span>
+<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a>   <span class="op">.</span> elems <span class="co">-- list fusion happens</span></span>
+<span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a>  <span class="kw">where</span></span>
+<span id="cb12-18"><a href="#cb12-18" aria-hidden="true" tabindex="-1"></a>    count (quota,quota') x <span class="op">|</span> x <span class="op">&gt;</span> <span class="dv">0</span> <span class="ot">=</span> (quota <span class="op">-</span> x, quota')</span>
+<span id="cb12-19"><a href="#cb12-19" aria-hidden="true" tabindex="-1"></a>    count (quota,quota') x <span class="op">|</span> x <span class="op">&lt;</span> <span class="dv">0</span> <span class="ot">=</span> (quota    , quota' <span class="op">-</span> x)</span>
+<span id="cb12-20"><a href="#cb12-20" aria-hidden="true" tabindex="-1"></a>    count acc                _     <span class="ot">=</span> acc</span>
+<span id="cb12-21"><a href="#cb12-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-22"><a href="#cb12-22" aria-hidden="true" tabindex="-1"></a><span class="ot">unmatchedCount ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">Maybe</span> (<span class="dt">IntMap</span> <span class="dt">Int</span>)</span>
+<span id="cb12-23"><a href="#cb12-23" aria-hidden="true" tabindex="-1"></a>unmatchedCount a b <span class="ot">=</span> go a b M.empty</span>
+<span id="cb12-24"><a href="#cb12-24" aria-hidden="true" tabindex="-1"></a>  <span class="kw">where</span></span>
+<span id="cb12-25"><a href="#cb12-25" aria-hidden="true" tabindex="-1"></a>    go (a<span class="op">:</span>as) (b<span class="op">:</span>bs) acc <span class="ot">=</span> go as bs</span>
+<span id="cb12-26"><a href="#cb12-26" aria-hidden="true" tabindex="-1"></a>      <span class="op">$</span> M.insertWith (<span class="op">+</span>) (<span class="fu">ord</span> a) <span class="dv">1</span></span>
+<span id="cb12-27"><a href="#cb12-27" aria-hidden="true" tabindex="-1"></a>      <span class="op">$</span> M.insertWith (<span class="op">+</span>) (<span class="fu">ord</span> b) (<span class="op">-</span><span class="dv">1</span>)</span>
+<span id="cb12-28"><a href="#cb12-28" aria-hidden="true" tabindex="-1"></a>      <span class="op">$</span> acc</span>
+<span id="cb12-29"><a href="#cb12-29" aria-hidden="true" tabindex="-1"></a>    go [] [] acc <span class="ot">=</span> <span class="dt">Just</span> acc</span>
+<span id="cb12-30"><a href="#cb12-30" aria-hidden="true" tabindex="-1"></a>    go _ _ _ <span class="ot">=</span> <span class="dt">Nothing</span></span></code></pre></div>
+<p>Here we take advantage of the list fusion provided by <code>IntMap.elems</code>: it lets us make a one-pass on the <code>IntMap</code> values, despite doing <code>elems</code>, <code>scanl</code> and <code>all</code> on them</p>
 <p>We don’t actually need <code>IntMap.Lazy</code>: it’s there just to demonstrate that we don’t in fact evaluate more entries than is necessary.</p>
 <p>Note that we cannot terminate earlier than this (in <code>unmatchedCount</code>), as we need to wait for all the counting to be done to know if there is an excess or deficit.</p>
 <p>And of course, we can never terminate early for the positive case of a true k-anagram, since <em>all</em> letter excess/deficits need to be within our k-quota. It’s the old contrast between proving a universal, and providing a counterexample.</p>
