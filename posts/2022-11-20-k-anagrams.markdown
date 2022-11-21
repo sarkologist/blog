@@ -179,3 +179,43 @@ unmatchedCount = go (MergeMap M.empty)
     go _   _  _  = Nothing
 ```
 
+If we are feeling particularly perverse, we can even optimise to terminate early as soon as some letter count exceeds `k`
+```haskell
+import Data.IntMap.Lazy as M
+import Data.Char
+
+main = do
+  -- demonstration of early termination if >k
+  print $ checkExceeds 0 $ M.fromList [(0,1), (1,undefined)]
+
+isKAnagram :: String -> String -> Int -> Bool
+isKAnagram a b k = maybe False (checkExceeds k) $ unmatchedCount a b
+
+checkExceeds :: Int -> IntMap Int -> Bool
+-- list fusion happens
+checkExceeds k = all snd . scanl count ((0,0),True) . elems
+  where
+    count ((more,less),_) x | x > 0 = ((more+x, less  ), more+x <= k)
+    count ((more,less),_) x | x < 0 = ((x     , less-x), less-x >= -k)
+    count acc             _         = acc
+
+unmatchedCount :: String -> String -> Maybe (IntMap Int)
+unmatchedCount a b = go a b M.empty
+  where
+    go (a:as) (b:bs) acc = go as bs
+      $ M.insertWith (+) (ord a) 1
+      $ M.insertWith (+) (ord b) (-1)
+      $ acc
+    go [] [] acc = Just acc
+    go _ _ _ = Nothing
+```
+
+Here we take advantage of
+
+- list fusion provided by `IntMap.elems`
+  - this lets us make one pass on the `IntMap` values, despite doing `elems`, `scanl` and `all` on them
+- short-circuit boolean `(&&)` evaluation of `all`
+
+We don't actually need `IntMap.Lazy`: it's there just to demonstrate that we don't in fact evaluate more entries than is necessary.
+
+Note that we cannot terminate earlier than this (in `unmatchedCount`), as we need to wait for all the counting to be done to know if there is an excess or deficit.
